@@ -55,12 +55,22 @@ class InvestigationEngine:
 
         # 3. Determine Root Cause and Causal Cascade
         root_cause = self._determine_root_cause(findings, timeline, entries)
+        if root_cause and context.get("version_change_analysis"):
+            v_info = context["version_change_analysis"]
+            summary_note = v_info.get("summary")
+            if summary_note and summary_note not in root_cause.contributing_factors:
+                if v_info.get("version_changed"):
+                    root_cause.contributing_factors.insert(0, summary_note)
+                    if summary_note not in root_cause.causal_chain:
+                        root_cause.causal_chain.insert(0, summary_note)
+                else:
+                    root_cause.contributing_factors.append(summary_note)
 
         # 4. Compute Blast Radius
         blast_radius = self._compute_blast_radius(entries, findings)
 
         # 5. Generate Concrete Remediation Actions
-        remediations = self._generate_remediations(root_cause, findings, blast_radius)
+        remediations = self._generate_remediations(root_cause, findings, blast_radius, context=context)
 
         # Determine overall status
         if any(f.severity == Severity.CRITICAL for f in findings):
@@ -372,6 +382,7 @@ class InvestigationEngine:
         root_cause: Optional[RootCause],
         findings: List[Finding],
         blast_radius: BlastRadius,
+        context: Optional[Dict[str, Any]] = None,
     ) -> List[RemediationAction]:
         """Generates structured remediation actions with copy-pasteable kubectl commands and patches."""
         actions: List[RemediationAction] = []
@@ -561,6 +572,20 @@ roleRef:
                 description="Check PVC status and volume attachments.",
                 kubectl_command="kubectl get pvc,pv,volumeattachment -A",
                 explanation="Identifies stuck volume attachments and unbound PersistentVolumeClaims.",
+            ))
+
+        v_info = (context or {}).get("version_change_analysis")
+        if v_info and v_info.get("version_changed"):
+            deploy_name = v_info.get("deployment_name") or "<deployment-name>"
+            prev_rev = v_info.get("previous_revision")
+            undo_cmd = f"kubectl rollout undo deployment/{deploy_name}"
+            if prev_rev:
+                undo_cmd += f" --to-revision={prev_rev}"
+            actions.append(RemediationAction(
+                action_type="immediate_mitigation",
+                description=f"Roll back deployment '{deploy_name}' to previous working version.",
+                kubectl_command=undo_cmd,
+                explanation=v_info.get("summary") or "Reverts the recent pod version/image rollout to restore stability.",
             ))
 
         return actions

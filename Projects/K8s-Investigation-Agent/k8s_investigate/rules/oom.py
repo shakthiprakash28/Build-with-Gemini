@@ -31,6 +31,7 @@ OOM_PATTERNS = [
     re.compile(r"Memory cgroup out of memory: Kill process (\d+) \(([^)]+)\) score (\d+)", re.IGNORECASE),
     re.compile(r"Pod memory limit exceeded:\s*([0-9\.]+\s*(?:Mi|Gi|Ki|MB|GB))?", re.IGNORECASE),
     re.compile(r"task killed by OOM killer", re.IGNORECASE),
+    re.compile(r"(?:worker \d+\s+)?got signal 9\b|killed by signal 9\b|signal 9\s*\(SIGKILL\)", re.IGNORECASE),
 ]
 
 

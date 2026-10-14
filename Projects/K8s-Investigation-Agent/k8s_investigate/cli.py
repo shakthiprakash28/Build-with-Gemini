@@ -1,11 +1,11 @@
 """
 Command-Line Interface (CLI) for Kubernetes Investigation Agent.
-Supports analyzing files, directories, or piped logs from stdin (e.g., kubectl logs | ...).
+Uses `get_pod_logs` and `get_pod_events` tools to fetch logs and events of a specific Kubernetes Pod
+and perform root cause analysis.
 """
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -29,20 +29,34 @@ if sys.platform == "win32":
 @click.command(name="k8s-investigate")
 @click.argument("source", nargs=-1, required=False, type=str)
 @click.option(
-    "--file", "-f", "file_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Path to a single Kubernetes log file.",
-)
-@click.option(
-    "--dir", "-d", "dir_path",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    help="Path to a directory containing Kubernetes log files.",
+    "--pod", "-p", "pod_name",
+    type=str,
+    default=None,
+    help="Name of the Kubernetes Pod to fetch logs and events from using get_pod_logs and get_pod_events.",
 )
 @click.option(
     "--namespace", "-n",
     type=str,
     default=None,
-    help="Default Kubernetes namespace context.",
+    help="Kubernetes namespace of the pod (default: 'default').",
+)
+@click.option(
+    "--container", "-c",
+    type=str,
+    default=None,
+    help="Optional specific container name within the pod.",
+)
+@click.option(
+    "--previous",
+    is_flag=True,
+    default=False,
+    help="Fetch logs from the previous terminated container instance.",
+)
+@click.option(
+    "--tail", "tail_lines",
+    type=int,
+    default=None,
+    help="Number of most recent log lines to fetch from the pod.",
 )
 @click.option(
     "--output", "-o", "output_path",
@@ -68,9 +82,11 @@ if sys.platform == "win32":
 )
 def main(
     source: tuple[str, ...],
-    file_path: Optional[Path],
-    dir_path: Optional[Path],
+    pod_name: Optional[str],
     namespace: Optional[str],
+    container: Optional[str],
+    previous: bool,
+    tail_lines: Optional[int],
     output_path: Optional[Path],
     output_format: str,
     llm: bool,
@@ -78,11 +94,13 @@ def main(
 ):
     """
     Kubernetes Investigation Agent CLI.
-    
+    Uses `get_pod_logs` and `get_pod_events` tools to fetch logs and events of a specific Kubernetes Pod
+    and perform root cause analysis.
+
     Examples:
-      k8s-investigate sample_logs/oom_killed_crashloop.log
-      k8s-investigate --file /var/log/pods/app.log --output report.md
-      kubectl logs my-app-7f89 | k8s-investigate - --output incident.json
+      k8s-investigate oom-test
+      k8s-investigate --pod nginx --namespace default
+      agent-cli run "Investigate the pod failure for oom-test"
     """
     console = Console()
     agent = KubernetesInvestigationAgent()
@@ -94,43 +112,40 @@ def main(
         source_args = source_args[1:]
     source_str = " ".join(source_args).strip() if source_args else None
 
-    # Resolve target log source
-    input_target = None
-    if file_path:
-        input_target = file_path
-    elif dir_path:
-        input_target = dir_path
-    elif source_str == "-" or (not source_str and not sys.stdin.isatty()):
-        # Read from stdin
-        if not quiet:
-            console.print("[dim]Reading log stream from stdin...[/dim]")
-        input_target = sys.stdin.read()
-    elif source_str:
-        resolved_src = agent._resolve_source_path(source_str)
-        if resolved_src:
-            input_target = resolved_src
-        else:
-            # Source might be a raw string
-            input_target = source_str
-    else:
-        console.print("[bold red]Error:[/bold red] No log input provided. Specify a log file, directory, or pipe logs via stdin.")
+    target_input = pod_name or source_str
+    if not target_input:
+        console.print(
+            "[bold red]Error:[/bold red] No Kubernetes Pod specified. "
+            "Provide a pod name or prompt (e.g., [bold]k8s-investigate <pod-name>[/bold] or [bold]--pod <pod-name>[/bold])."
+        )
         console.print("Run [bold cyan]k8s-investigate --help[/bold cyan] for usage instructions.")
         sys.exit(1)
 
-    # Run investigation
-    if not quiet and output_format == "terminal":
-        with console.status("[bold green]Investigating Kubernetes logs, extracting evidence & determining root cause..."):
+    try:
+        if not quiet and output_format == "terminal":
+            with console.status(
+                "[bold green]Fetching pod logs & events via get_pod_logs and get_pod_events tools..."
+            ):
+                report = agent.investigate(
+                    source=target_input,
+                    namespace=namespace,
+                    container=container,
+                    previous=previous,
+                    tail_lines=tail_lines,
+                    enable_llm=llm,
+                )
+        else:
             report = agent.investigate(
-                source=input_target,
+                source=target_input,
                 namespace=namespace,
+                container=container,
+                previous=previous,
+                tail_lines=tail_lines,
                 enable_llm=llm,
             )
-    else:
-        report = agent.investigate(
-            source=input_target,
-            namespace=namespace,
-            enable_llm=llm,
-        )
+    except Exception as exc:
+        console.print(f"[bold red]Error:[/bold red] {exc}")
+        sys.exit(1)
 
     # Format auto-detection based on file extension if output_path is provided
     if output_path and output_format == "terminal":
@@ -158,7 +173,7 @@ def main(
             file_content = renderer.render_json(report)
         else:
             file_content = renderer.render_markdown(report)
-            
+
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(file_content)
         console.print(f"[bold green]✓[/bold green] Detailed investigation report saved to: [cyan]{output_path}[/cyan]")

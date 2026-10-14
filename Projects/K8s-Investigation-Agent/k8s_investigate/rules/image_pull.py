@@ -26,6 +26,7 @@ IMAGE_PATTERNS = [
     re.compile(r"toomanyrequests:\s*You have reached your pull rate limit", re.IGNORECASE),
     re.compile(r"manifest for\s+([^:]+:[^\s]+)\s+not found", re.IGNORECASE),
     re.compile(r"unauthorized:\s*authentication required", re.IGNORECASE),
+    re.compile(r"trying and failing to pull image", re.IGNORECASE),
 ]
 
 

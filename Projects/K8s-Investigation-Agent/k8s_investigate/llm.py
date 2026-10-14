@@ -11,14 +11,16 @@ import os
 from typing import Optional
 
 from k8s_investigate.models import Finding, RootCause
+from k8s_investigate.tools import get_deployment_history, get_pod_events, get_pod_logs
 
 
 class LLMAdvisor:
-    """Provides optional AI synthesis over deterministic investigation findings."""
+    """Provides optional AI synthesis and tool-enabled log/event/history fetching over investigation findings."""
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         self.client = None
+        self.tools = [get_pod_logs, get_pod_events, get_deployment_history]
 
         if self.api_key:
             try:

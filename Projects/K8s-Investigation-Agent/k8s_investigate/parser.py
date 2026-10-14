@@ -79,7 +79,8 @@ CONTAINER_PATTERN = re.compile(
 )
 
 NODE_PATTERN = re.compile(
-    r"\b(?:assigned\s+(?:\S+\s+)?to node\s+|assigned to\s+|to node\s+|attached to\s+|on node\s+|node[:=\s]+)([a-z0-9]+(?:-[a-z0-9]+)+)\b",
+    r"\b(?:assigned\s+(?:\S+\s+)?to node\s+|assigned to\s+|to node\s+|attached to\s+|on node\s+|node[:=\s]+)([a-z0-9]+(?:-[a-z0-9]+)+)\b|"
+    r"\bassigned\s+[a-z0-9\-.]+/[a-z0-9_\-.]+\s+to\s+([a-z0-9](?:[-.a-z0-9]*[a-z0-9])?)\b",
     re.IGNORECASE,
 )
 
@@ -152,6 +153,8 @@ class LogParser:
 
         def _apply_context(entry: LogEntry) -> LogEntry:
             if not entry.pod and context_pod:
+                entry.pod = context_pod
+            elif context_pod and entry.pod and entry.pod.startswith(f"{context_pod}_"):
                 entry.pod = context_pod
             if (not entry.namespace or entry.namespace == "default") and context_namespace:
                 entry.namespace = context_namespace
@@ -402,14 +405,15 @@ class LogParser:
             if len(parts) == 2 and parts[0] in ["pod", "deployment", "statefulset"]:
                 pod = parts[1]
 
-        _, _, _, node = self._extract_k8s_identifiers(msg)
+        msg_pod, msg_ns, container, node = self._extract_k8s_identifiers(msg)
 
         return LogEntry(
             line_number=line_number,
             raw=raw_line,
             level=level,
-            pod=pod,
-            namespace=self.default_namespace,
+            pod=pod or msg_pod,
+            namespace=msg_ns or self.default_namespace,
+            container=container,
             node=node,
             message=f"[{reason}] {msg}",
             metadata={"event_reason": reason, "event_type": evt_type, "object": obj, "last_seen": match.group("last_seen")},
@@ -512,7 +516,7 @@ class LogParser:
 
         node_m = NODE_PATTERN.search(text)
         if node_m:
-            cand = node_m.group(1)
+            cand = node_m.group(1) or node_m.group(2)
             if self._is_valid_identifier(cand):
                 node = cand
 

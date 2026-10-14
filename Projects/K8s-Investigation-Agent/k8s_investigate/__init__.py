@@ -19,6 +19,7 @@ from k8s_investigate.models import (
 )
 from k8s_investigate.parser import LogParser
 from k8s_investigate.reporter import ReportRenderer
+from k8s_investigate.tools import get_deployment_history, get_pod_events, get_pod_logs
 
 __version__ = "1.0.0"
 
@@ -27,6 +28,9 @@ __all__ = [
     "InvestigationEngine",
     "LogParser",
     "ReportRenderer",
+    "get_pod_logs",
+    "get_pod_events",
+    "get_deployment_history",
     "InvestigationReport",
     "RootCause",
     "Finding",

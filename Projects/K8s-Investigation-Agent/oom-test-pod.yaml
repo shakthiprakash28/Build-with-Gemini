@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oom-test
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    # This commands the stress binary to request 60MB of RAM immediately 
+    command: ["stress", "--vm", "1", "--vm-bytes", "60M", "--vm-hang", "1"]
+    resources:
+      limits:
+        memory: "50Mi"
+      requests:
+        memory: "25Mi"
