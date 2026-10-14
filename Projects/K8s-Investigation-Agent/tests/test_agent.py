@@ -41,3 +41,30 @@ def test_agent_markdown_and_json_serialization():
     js = agent.renderer.render_json(report)
     assert "investigation_id" in js
     assert "root_cause" in js
+
+
+def test_agent_utf16_and_prompt_path(tmp_path):
+    agent = KubernetesInvestigationAgent()
+    log_file = tmp_path / "powershell_describe.log"
+    content = (
+        "Name:             nginx\n"
+        "Namespace:        default\n"
+        "Node:             minikube/192.168.49.2\n"
+        "Containers:\n"
+        "  nginx:\n"
+        "    Image:          nginx:1.32.7\n"
+        "    State:          Waiting\n"
+        "      Reason:       ErrImagePull\n"
+        "Events:\n"
+        "  Warning  Failed          23s (x4 over 116s)     kubelet  Failed to pull image \"nginx:1.32.7\": rpc error: code = NotFound desc = failed to pull and unpack image \"docker.io/library/nginx:1.32.7\": not found\n"
+        "  Normal   SandboxChanged  2m                     kubelet  Pod sandbox changed, it will be killed and re-created.\n"
+    )
+    log_file.write_bytes(content.encode("utf-16"))
+
+    prompt = f"Investigate the pod failure from the attached log file {log_file}"
+    report = agent.investigate(prompt)
+
+    assert report.root_cause is not None
+    assert report.root_cause.category == FailureCategory.IMAGE_PULL_FAILURE
+    assert report.blast_radius.pods_affected == ["nginx"]
+

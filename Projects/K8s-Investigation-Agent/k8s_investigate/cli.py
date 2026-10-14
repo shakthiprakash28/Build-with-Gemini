@@ -27,7 +27,7 @@ if sys.platform == "win32":
 
 
 @click.command(name="k8s-investigate")
-@click.argument("source", required=False, type=str)
+@click.argument("source", nargs=-1, required=False, type=str)
 @click.option(
     "--file", "-f", "file_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
@@ -67,7 +67,7 @@ if sys.platform == "win32":
     help="Suppress terminal output (useful when exporting directly to a file).",
 )
 def main(
-    source: Optional[str],
+    source: tuple[str, ...],
     file_path: Optional[Path],
     dir_path: Optional[Path],
     namespace: Optional[str],
@@ -88,34 +88,30 @@ def main(
     agent = KubernetesInvestigationAgent()
     renderer = ReportRenderer(console=console)
 
+    # Normalize positional source arguments (support optional 'run' subcommand prefix)
+    source_args = list(source) if source else []
+    if len(source_args) > 1 and source_args[0].lower() == "run":
+        source_args = source_args[1:]
+    source_str = " ".join(source_args).strip() if source_args else None
+
     # Resolve target log source
     input_target = None
     if file_path:
         input_target = file_path
     elif dir_path:
         input_target = dir_path
-    elif source == "-" or (not source and not sys.stdin.isatty()):
+    elif source_str == "-" or (not source_str and not sys.stdin.isatty()):
         # Read from stdin
         if not quiet:
             console.print("[dim]Reading log stream from stdin...[/dim]")
         input_target = sys.stdin.read()
-    elif source:
-        cleaned = source.strip()
-        resolved_src: Optional[Path] = None
-        if sys.platform == "win32":
-            m = re.match(r"^/([a-zA-Z])/(.*)$", cleaned)
-            if m:
-                converted = f"{m.group(1).upper()}:/{m.group(2)}"
-                if Path(converted).exists():
-                    resolved_src = Path(converted)
-        if not resolved_src and Path(cleaned).exists():
-            resolved_src = Path(cleaned)
-
+    elif source_str:
+        resolved_src = agent._resolve_source_path(source_str)
         if resolved_src:
             input_target = resolved_src
         else:
             # Source might be a raw string
-            input_target = source
+            input_target = source_str
     else:
         console.print("[bold red]Error:[/bold red] No log input provided. Specify a log file, directory, or pipe logs via stdin.")
         console.print("Run [bold cyan]k8s-investigate --help[/bold cyan] for usage instructions.")

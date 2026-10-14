@@ -36,6 +36,7 @@ dev = [
 
 [project.scripts]
 k8s-investigate = "k8s_investigate.cli:main"
+agent-cli = "k8s_investigate.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

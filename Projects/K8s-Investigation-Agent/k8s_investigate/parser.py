@@ -96,6 +96,7 @@ STOP_WORDS = {
     "event", "events", "reason", "type", "age", "message", "unhealthy", "healthy",
     "status", "spec", "metadata", "namespace", "ready", "syncing", "skipping",
     "running", "completed", "terminated", "will", "and", "or", "not", "is", "was",
+    "sandbox", "condition", "conditions", "state", "phase",
 }
 
 STACK_TRACE_START_PATTERN = re.compile(

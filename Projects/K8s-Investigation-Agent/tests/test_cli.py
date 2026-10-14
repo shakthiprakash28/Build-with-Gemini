@@ -47,3 +47,25 @@ def test_cli_export_markdown(tmp_path):
     assert out_file.exists()
     content = out_file.read_text(encoding="utf-8")
     assert "# 🛡️ Kubernetes Incident Investigation Report" in content
+
+
+def test_cli_run_with_prompt(tmp_path):
+    runner = CliRunner()
+    log_file = tmp_path / "nginx.log"
+    log_file.write_bytes(
+        (
+            "Name:             nginx\n"
+            "Namespace:        default\n"
+            "Containers:\n"
+            "  nginx:\n"
+            "    State:          Waiting\n"
+            "      Reason:       ErrImagePull\n"
+            "Events:\n"
+            "  Warning  Failed  10s  kubelet  Failed to pull image \"nginx:1.32.7\": not found\n"
+        ).encode("utf-16")
+    )
+
+    result = runner.invoke(main, ["run", f"Investigate the pod failure from the attached log file {log_file}"])
+    assert result.exit_code == 0
+    assert "IMAGE_PULL_FAILURE" in result.output
+
