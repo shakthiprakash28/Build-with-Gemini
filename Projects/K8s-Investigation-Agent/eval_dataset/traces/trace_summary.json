@@ -1,0 +1,289 @@
+{
+  "dataset_name": "K8s-Investigation-Agent Incident Evaluation Benchmark",
+  "version": "1.0.0",
+  "suite_started_at": "2026-10-14T23:42:02.380467+00:00",
+  "suite_completed_at": "2026-10-14T23:42:02.515215+00:00",
+  "suite_total_duration_ms": 134.7192,
+  "average_case_duration_ms": 9.2709,
+  "total_cases": 10,
+  "passed_cases": 10,
+  "failed_cases": 0,
+  "accuracy_rate": 1.0,
+  "total_tool_calls": 30,
+  "total_trace_steps": 90,
+  "total_rules_evaluated": 90,
+  "cases": [
+    {
+      "test_case_id": "TC-01",
+      "slug": "oom_kill",
+      "name": "OOM Kill (Container Memory Limit Exceeded)",
+      "trace_file": "traces/tc01_oom_kill_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod recommendation-engine-6b8f9c4d2-x7v2p in namespace ml-serving",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 9,
+      "matched_rules": [
+        "RULE_K8S_OOM_KILL",
+        "RULE_K8S_CRASHLOOP_BACKOFF"
+      ],
+      "predicted_category": "OOM_KILL",
+      "expected_category": "OOM_KILL",
+      "predicted_subtype": null,
+      "expected_subtype": null,
+      "predicted_severity": "CRITICAL",
+      "confidence": 0.98,
+      "remediations_count": 2,
+      "duration_ms": 16.3689,
+      "passed": true,
+      "score": 1.0
+    },
+    {
+      "test_case_id": "TC-02",
+      "slug": "cpu_throttling",
+      "name": "CPU Throttling (CFS Quota Exhaustion)",
+      "trace_file": "traces/tc02_cpu_throttling_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod pricing-calculator-7c9d4b5f8-m2k9l in namespace commerce",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 6,
+      "matched_rules": [
+        "RULE_K8S_SCHEDULING_FAILURE"
+      ],
+      "predicted_category": "SCHEDULING_NODE_FAILURE",
+      "expected_category": "SCHEDULING_NODE_FAILURE",
+      "predicted_subtype": "CPU_THROTTLING",
+      "expected_subtype": "CPU_THROTTLING",
+      "predicted_severity": "HIGH",
+      "confidence": 0.94,
+      "remediations_count": 2,
+      "duration_ms": 8.3592,
+      "passed": true,
+      "score": 1.0
+    },
+    {
+      "test_case_id": "TC-03",
+      "slug": "container_crash",
+      "name": "Container Crash (Unhandled Runtime Panic / SIGSEGV)",
+      "trace_file": "traces/tc03_container_crash_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod invoice-generator-5f7b8d9c1-q4n8w in namespace billing",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 8,
+      "matched_rules": [
+        "RULE_K8S_CRASHLOOP_BACKOFF",
+        "RULE_APPLICATION_PANIC_EXCEPTION"
+      ],
+      "predicted_category": "APPLICATION_PANIC",
+      "expected_category": "APPLICATION_PANIC",
+      "predicted_subtype": null,
+      "expected_subtype": null,
+      "predicted_severity": "HIGH",
+      "confidence": 0.9,
+      "remediations_count": 2,
+      "duration_ms": 10.464,
+      "passed": true,
+      "score": 1.0
+    },
+    {
+      "test_case_id": "TC-04",
+      "slug": "crash_loop_backoff",
+      "name": "CrashLoopBackOff (Missing Secret / Startup Configuration Failure)",
+      "trace_file": "traces/tc04_crash_loop_backoff_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod auth-token-service-84d9b6c7f-z9p3x in namespace identity",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 9,
+      "matched_rules": [
+        "RULE_K8S_CRASHLOOP_BACKOFF"
+      ],
+      "predicted_category": "CRASH_LOOP",
+      "expected_category": "CRASH_LOOP",
+      "predicted_subtype": null,
+      "expected_subtype": null,
+      "predicted_severity": "CRITICAL",
+      "confidence": 0.95,
+      "remediations_count": 2,
+      "duration_ms": 13.0175,
+      "passed": true,
+      "score": 1.0
+    },
+    {
+      "test_case_id": "TC-05",
+      "slug": "node_memory_pressure",
+      "name": "Node Memory Pressure & Kubelet Pod Eviction",
+      "trace_file": "traces/tc05_node_memory_pressure_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod analytics-aggregator-59b7c4d8e-v6r2t in namespace data-pipeline",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 6,
+      "matched_rules": [
+        "RULE_K8S_SCHEDULING_FAILURE"
+      ],
+      "predicted_category": "SCHEDULING_NODE_FAILURE",
+      "expected_category": "SCHEDULING_NODE_FAILURE",
+      "predicted_subtype": "NODE_MEMORY_PRESSURE",
+      "expected_subtype": "NODE_MEMORY_PRESSURE",
+      "predicted_severity": "CRITICAL",
+      "confidence": 0.96,
+      "remediations_count": 2,
+      "duration_ms": 7.9899,
+      "passed": true,
+      "score": 1.0
+    },
+    {
+      "test_case_id": "TC-06",
+      "slug": "node_not_ready",
+      "name": "Node Not Ready (PLEG Unhealthy & Container Runtime Hang)",
+      "trace_file": "traces/tc06_node_not_ready_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod order-processor-6d4f8b9a2-h5j8k in namespace orders",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 6,
+      "matched_rules": [
+        "RULE_K8S_SCHEDULING_FAILURE"
+      ],
+      "predicted_category": "SCHEDULING_NODE_FAILURE",
+      "expected_category": "SCHEDULING_NODE_FAILURE",
+      "predicted_subtype": "NODE_NOT_READY",
+      "expected_subtype": "NODE_NOT_READY",
+      "predicted_severity": "CRITICAL",
+      "confidence": 0.97,
+      "remediations_count": 2,
+      "duration_ms": 7.024,
+      "passed": true,
+      "score": 1.0
+    },
+    {
+      "test_case_id": "TC-07",
+      "slug": "readiness_probe_incorrect",
+      "name": "Readiness Probe Misconfigured (Wrong HTTP Path / Port)",
+      "trace_file": "traces/tc07_readiness_probe_incorrect_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod catalog-search-7f8e9d6c4-b3n5m in namespace storefront",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 6,
+      "matched_rules": [
+        "RULE_K8S_PROBE_FAILURE"
+      ],
+      "predicted_category": "PROBE_FAILURE",
+      "expected_category": "PROBE_FAILURE",
+      "predicted_subtype": null,
+      "expected_subtype": null,
+      "predicted_severity": "HIGH",
+      "confidence": 0.95,
+      "remediations_count": 2,
+      "duration_ms": 7.7241,
+      "passed": true,
+      "score": 1.0
+    },
+    {
+      "test_case_id": "TC-08",
+      "slug": "resource_request_limits",
+      "name": "Resource Request Limits (Unschedulable Pod / Insufficient CPU & Memory)",
+      "trace_file": "traces/tc08_resource_request_limits_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod fraud-detection-model-9a8b7c6d5-p4l2k in namespace risk-engine",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 4,
+      "matched_rules": [
+        "RULE_K8S_SCHEDULING_FAILURE"
+      ],
+      "predicted_category": "SCHEDULING_NODE_FAILURE",
+      "expected_category": "SCHEDULING_NODE_FAILURE",
+      "predicted_subtype": "INSUFFICIENT_CPU",
+      "expected_subtype": "INSUFFICIENT_CPU",
+      "predicted_severity": "HIGH",
+      "confidence": 0.96,
+      "remediations_count": 2,
+      "duration_ms": 7.2114,
+      "passed": true,
+      "score": 1.0
+    },
+    {
+      "test_case_id": "TC-09",
+      "slug": "service_no_endpoints",
+      "name": "Service Has No Endpoints (Label Selector Mismatch)",
+      "trace_file": "traces/tc09_service_no_endpoints_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod inventory-service-5c6d7e8f9-t2w4y in namespace fulfillment",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 5,
+      "matched_rules": [
+        "RULE_K8S_NETWORK_DNS_FAILURE"
+      ],
+      "predicted_category": "NETWORK_DNS_FAILURE",
+      "expected_category": "NETWORK_DNS_FAILURE",
+      "predicted_subtype": "SERVICE_NO_ENDPOINTS",
+      "expected_subtype": "SERVICE_NO_ENDPOINTS",
+      "predicted_severity": "HIGH",
+      "confidence": 0.96,
+      "remediations_count": 2,
+      "duration_ms": 7.0872,
+      "passed": true,
+      "score": 1.0
+    },
+    {
+      "test_case_id": "TC-10",
+      "slug": "service_routes_unhealthy_pods",
+      "name": "Service Routes Traffic to Unhealthy Pods (publishNotReadyAddresses Enabled)",
+      "trace_file": "traces/tc10_service_routes_unhealthy_pods_trace.json",
+      "prompt": "Investigate the Kubernetes incident for pod checkout-gateway-4e5f6a7b8-r9m1c in namespace payments",
+      "tools_invoked": [
+        "get_pod_logs",
+        "get_pod_events",
+        "get_deployment_history"
+      ],
+      "total_steps": 9,
+      "parsed_entries": 5,
+      "matched_rules": [
+        "RULE_K8S_NETWORK_DNS_FAILURE"
+      ],
+      "predicted_category": "NETWORK_DNS_FAILURE",
+      "expected_category": "NETWORK_DNS_FAILURE",
+      "predicted_subtype": "SERVICE_ROUTES_UNHEALTHY_PODS",
+      "expected_subtype": "SERVICE_ROUTES_UNHEALTHY_PODS",
+      "predicted_severity": "HIGH",
+      "confidence": 0.95,
+      "remediations_count": 2,
+      "duration_ms": 7.4629,
+      "passed": true,
+      "score": 1.0
+    }
+  ]
+}

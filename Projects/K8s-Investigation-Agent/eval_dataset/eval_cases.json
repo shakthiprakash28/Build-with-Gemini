@@ -1,0 +1,280 @@
+{
+  "dataset_name": "K8s-Investigation-Agent Incident Evaluation Benchmark",
+  "version": "1.0.0",
+  "total_cases": 10,
+  "cases": [
+    {
+      "id": "TC-01",
+      "slug": "oom_kill",
+      "name": "OOM Kill (Container Memory Limit Exceeded)",
+      "log_file": "logs/tc01_oom_kill.log",
+      "scenario_description": "An ML recommendation worker container ('recommendation-worker') in pod 'recommendation-engine-6b8f9c4d2-x7v2p' (namespace 'ml-serving') loads a dense vector embedding index during a traffic spike, exceeding its 512Mi cgroup memory limit. The Linux kernel OOM killer dispatches SIGKILL (exit code 137), and kubelet marks the container OOMKilled before entering CrashLoopBackOff.",
+      "injected_fault": "Container memory allocation (548Mi) exceeds resources.limits.memory (512Mi), triggering kernel cgroup OOM killer (SIGKILL / exit code 137).",
+      "expected_root_cause_category": "OOM_KILL",
+      "expected_severity": "CRITICAL",
+      "expected_impacted_resources": [
+        "recommendation-engine-6b8f9c4d2-x7v2p"
+      ],
+      "expected_namespace": "ml-serving",
+      "expected_container": "recommendation-worker",
+      "expected_node": "node-gpu-pool-02",
+      "ground_truth_rca": "Container 'recommendation-worker' in pod 'recommendation-engine-6b8f9c4d2-x7v2p' was terminated by the Linux kernel Out-Of-Memory (OOM) killer with exit code 137 (SIGKILL) after exceeding its 512Mi cgroup memory limit, triggering repeated CrashLoopBackOff restarts.",
+      "ground_truth_evidence_keywords": [
+        "OOMKilled",
+        "Memory cgroup out of memory: Killed process",
+        "exit code 137",
+        "CrashLoopBackOff"
+      ],
+      "expected_remediation_commands": [
+        "kubectl set resources deployment/<deployment-name> --limits=memory=1Gi --requests=memory=512Mi",
+        "kubectl logs recommendation-engine-6b8f9c4d2-x7v2p --previous | grep -i -E 'oom|memory|heap'"
+      ]
+    },
+    {
+      "id": "TC-02",
+      "slug": "cpu_throttling",
+      "name": "CPU Throttling (CFS Quota Exhaustion)",
+      "log_file": "logs/tc02_cpu_throttling.log",
+      "scenario_description": "A latency-sensitive pricing API ('pricing-api') in pod 'pricing-calculator-7c9d4b5f8-m2k9l' (namespace 'commerce') runs 8 OS worker threads with a restrictive CPU limit of 200m (cfs_quota_us=20000 per 100000us period). During promotional traffic bursts, the Linux CFS bandwidth controller throttles the container across 86.4% of scheduling periods, spiking p99 response times to 2.45s without killing the container.",
+      "injected_fault": "Restrictive resources.limits.cpu: 200m on multi-threaded Go service (GOMAXPROCS=8) causing severe Linux CFS bandwidth throttling.",
+      "expected_root_cause_category": "SCHEDULING_NODE_FAILURE",
+      "expected_subtype": "CPU_THROTTLING",
+      "expected_severity": "HIGH",
+      "expected_impacted_resources": [
+        "pricing-calculator-7c9d4b5f8-m2k9l"
+      ],
+      "expected_namespace": "commerce",
+      "expected_container": "pricing-api",
+      "expected_node": "node-general-04",
+      "ground_truth_rca": "Container 'pricing-api' in pod 'pricing-calculator-7c9d4b5f8-m2k9l' is experiencing severe Linux CFS CPU bandwidth throttling (nr_throttled=412, throttled_time=38.42s, 86.4% periods throttled) because its 8 concurrent worker threads rapidly exhaust the 200m CPU quota within each 100ms period.",
+      "ground_truth_evidence_keywords": [
+        "CPU throttling detected",
+        "nr_throttled=412",
+        "throttled_time=",
+        "CFS quota exceeded"
+      ],
+      "expected_remediation_commands": [
+        "kubectl set resources deployment/<deployment-name> --limits=cpu=2000m --requests=cpu=500m",
+        "kubectl top pod pricing-calculator-7c9d4b5f8-m2k9l --containers"
+      ]
+    },
+    {
+      "id": "TC-03",
+      "slug": "container_crash",
+      "name": "Container Crash (Unhandled Runtime Panic / SIGSEGV)",
+      "log_file": "logs/tc03_container_crash.log",
+      "scenario_description": "An invoice batch worker container ('invoice-worker') in pod 'invoice-generator-5f7b8d9c1-q4n8w' (namespace 'billing') crashes mid-execution due to an unhandled nil pointer dereference (SIGSEGV) when processing an invoice record with a null tax jurisdiction object. The container terminates immediately with exit code 2.",
+      "injected_fault": "Null tax_jurisdiction struct dereferenced in CalculateRegionalTax(), triggering Go runtime SIGSEGV panic and container exit code 2.",
+      "expected_root_cause_category": "APPLICATION_PANIC",
+      "expected_severity": "HIGH",
+      "expected_impacted_resources": [
+        "invoice-generator-5f7b8d9c1-q4n8w"
+      ],
+      "expected_namespace": "billing",
+      "expected_container": "invoice-worker",
+      "expected_node": "node-general-01",
+      "ground_truth_rca": "Container 'invoice-worker' in pod 'invoice-generator-5f7b8d9c1-q4n8w' crashed with exit code 2 due to an unhandled Go runtime nil pointer dereference panic (SIGSEGV) in billing/tax.CalculateRegionalTax() at invoice_processor.go:142.",
+      "ground_truth_evidence_keywords": [
+        "panic: runtime error: invalid memory address or nil pointer dereference",
+        "SIGSEGV",
+        "goroutine",
+        "exit code 2"
+      ],
+      "expected_remediation_commands": [
+        "kubectl logs invoice-generator-5f7b8d9c1-q4n8w --previous",
+        "kubectl describe pod invoice-generator-5f7b8d9c1-q4n8w"
+      ]
+    },
+    {
+      "id": "TC-04",
+      "slug": "crash_loop_backoff",
+      "name": "CrashLoopBackOff (Missing Secret / Startup Configuration Failure)",
+      "log_file": "logs/tc04_crash_loop_backoff.log",
+      "scenario_description": "The authentication service pod 'auth-token-service-84d9b6c7f-z9p3x' (container 'auth-server', namespace 'identity') fails on startup because the required RSA private key file '/etc/secrets/jwt/private.pem' is missing from its mounted Secret volume. The process exits with code 1 on every boot attempt, causing kubelet to place the pod into CrashLoopBackOff after 6 rapid restarts.",
+      "injected_fault": "Missing '/etc/secrets/jwt/private.pem' key in mounted Kubernetes Secret causes immediate startup exit (code 1) and exponential CrashLoopBackOff.",
+      "expected_root_cause_category": "CRASH_LOOP",
+      "expected_severity": "CRITICAL",
+      "expected_impacted_resources": [
+        "auth-token-service-84d9b6c7f-z9p3x"
+      ],
+      "expected_namespace": "identity",
+      "expected_container": "auth-server",
+      "expected_node": "node-general-03",
+      "ground_truth_rca": "Container 'auth-server' in pod 'auth-token-service-84d9b6c7f-z9p3x' is stuck in CrashLoopBackOff (restartCount=6, exit code 1) because it cannot load the required JWT signing key at '/etc/secrets/jwt/private.pem' during initialization.",
+      "ground_truth_evidence_keywords": [
+        "CrashLoopBackOff",
+        "Back-off restarting failed container",
+        "exit code 1",
+        "/etc/secrets/jwt/private.pem"
+      ],
+      "expected_remediation_commands": [
+        "kubectl logs auth-token-service-84d9b6c7f-z9p3x --previous",
+        "kubectl debug -it auth-token-service-84d9b6c7f-z9p3x --image=busybox --target=app"
+      ]
+    },
+    {
+      "id": "TC-05",
+      "slug": "node_memory_pressure",
+      "name": "Node Memory Pressure & Kubelet Pod Eviction",
+      "log_file": "logs/tc05_node_memory_pressure.log",
+      "scenario_description": "Worker node 'node-worker-07' runs critically low on host memory (available RAM drops to 42Mi, below the 100Mi eviction hard threshold). Kubelet transitions node condition 'MemoryPressure' to True and invokes the eviction manager to evict Burstable pod 'analytics-aggregator-59b7c4d8e-v6r2t' (container 'spark-executor', namespace 'data-pipeline').",
+      "injected_fault": "Host node available memory falls below kubelet evictionHard threshold (memory.available<100Mi), triggering NodeCondition MemoryPressure=True and pod eviction.",
+      "expected_root_cause_category": "SCHEDULING_NODE_FAILURE",
+      "expected_subtype": "NODE_MEMORY_PRESSURE",
+      "expected_severity": "CRITICAL",
+      "expected_impacted_resources": [
+        "analytics-aggregator-59b7c4d8e-v6r2t"
+      ],
+      "expected_namespace": "data-pipeline",
+      "expected_container": "spark-executor",
+      "expected_node": "node-worker-07",
+      "ground_truth_rca": "Worker node 'node-worker-07' entered MemoryPressure=True when available host memory dropped to 42Mi (below the 100Mi eviction threshold), causing the kubelet eviction manager to evict pod 'analytics-aggregator-59b7c4d8e-v6r2t'.",
+      "ground_truth_evidence_keywords": [
+        "MemoryPressure",
+        "The node was low on resource: memory",
+        "Evicted",
+        "NodeHasInsufficientMemory"
+      ],
+      "expected_remediation_commands": [
+        "kubectl describe node node-worker-07 | grep -A 15 -E 'Conditions:|Allocated resources:'",
+        "kubectl get pods -A --field-selector=status.phase=Failed -o wide"
+      ]
+    },
+    {
+      "id": "TC-06",
+      "slug": "node_not_ready",
+      "name": "Node Not Ready (PLEG Unhealthy & Container Runtime Hang)",
+      "log_file": "logs/tc06_node_not_ready.log",
+      "scenario_description": "Worker node 'node-worker-11' hosting pod 'order-processor-6d4f8b9a2-h5j8k' (container 'order-consumer', namespace 'orders') suffers a containerd runtime deadlock. Kubelet's Pod Lifecycle Event Generator (PLEG) fails relist health checks after exceeding the 3m0s timeout (last seen active 4m12s ago). The node transitions to NodeNotReady and the node controller initiates pod eviction.",
+      "injected_fault": "containerd CRI socket deadlock on node-worker-11 causes kubelet PLEG relist timeout (>3m0s) and NodeNotReady state transition.",
+      "expected_root_cause_category": "SCHEDULING_NODE_FAILURE",
+      "expected_subtype": "NODE_NOT_READY",
+      "expected_severity": "CRITICAL",
+      "expected_impacted_resources": [
+        "order-processor-6d4f8b9a2-h5j8k"
+      ],
+      "expected_namespace": "orders",
+      "expected_container": "order-consumer",
+      "expected_node": "node-worker-11",
+      "ground_truth_rca": "Worker node 'node-worker-11' transitioned to NodeNotReady because the kubelet Pod Lifecycle Event Generator (PLEG) became unhealthy ('pleg was last seen active 4m12s ago; threshold is 3m0s') due to an unresponsive containerd CRI runtime socket, disrupting pod 'order-processor-6d4f8b9a2-h5j8k'.",
+      "ground_truth_evidence_keywords": [
+        "NodeNotReady",
+        "PLEG is not healthy",
+        "threshold is 3m0s",
+        "container runtime status check"
+      ],
+      "expected_remediation_commands": [
+        "kubectl cordon node-worker-11 && kubectl drain node-worker-11 --ignore-daemonsets --delete-emptydir-data",
+        "kubectl describe node node-worker-11 | grep -A 12 'Conditions:'"
+      ]
+    },
+    {
+      "id": "TC-07",
+      "slug": "readiness_probe_incorrect",
+      "name": "Readiness Probe Misconfigured (Wrong HTTP Path / Port)",
+      "log_file": "logs/tc07_readiness_probe_incorrect.log",
+      "scenario_description": "The catalog search service ('catalog-service') in pod 'catalog-search-7f8e9d6c4-b3n5m' (namespace 'storefront') initializes cleanly and serves traffic on port 8080 with health check endpoint '/api/v1/healthz'. However, the Deployment's readinessProbe is misconfigured to query 'http://10.244.2.48:8080/healthz', which returns HTTP 404 Not Found. Kubelet marks the pod Unhealthy (0/1 Ready) without restarting the container.",
+      "injected_fault": "Deployment spec.template.spec.containers[0].readinessProbe.httpGet.path set to '/healthz' instead of '/api/v1/healthz', returning HTTP 404.",
+      "expected_root_cause_category": "PROBE_FAILURE",
+      "expected_severity": "HIGH",
+      "expected_impacted_resources": [
+        "catalog-search-7f8e9d6c4-b3n5m"
+      ],
+      "expected_namespace": "storefront",
+      "expected_container": "catalog-service",
+      "expected_node": "node-general-02",
+      "ground_truth_rca": "Pod 'catalog-search-7f8e9d6c4-b3n5m' (container 'catalog-service') is marked Unready because its Kubernetes readinessProbe is querying '/healthz' (returning HTTP 404 Not Found) instead of the application's actual health endpoint '/api/v1/healthz'.",
+      "ground_truth_evidence_keywords": [
+        "Readiness probe failed",
+        "HTTP probe failed with statuscode: 404",
+        "/healthz"
+      ],
+      "expected_remediation_commands": [
+        "kubectl describe pod catalog-search-7f8e9d6c4-b3n5m | grep -A 10 -E 'Liveness|Readiness|Events'"
+      ]
+    },
+    {
+      "id": "TC-08",
+      "slug": "resource_request_limits",
+      "name": "Resource Request Limits (Unschedulable Pod / Insufficient CPU & Memory)",
+      "log_file": "logs/tc08_resource_request_limits.log",
+      "scenario_description": "Pod 'fraud-detection-model-9a8b7c6d5-p4l2k' (container 'inference-server', namespace 'risk-engine') is deployed with excessive resource requests (requests.cpu=16000m, requests.memory=64Gi) on a 6-node cluster of 8-vCPU / 32Gi worker nodes. The Kubernetes scheduler rejects all candidate nodes with FailedScheduling ('0/6 nodes are available: 4 Insufficient cpu, 6 Insufficient memory'), leaving the pod stuck in Pending.",
+      "injected_fault": "Oversized pod resource requests (cpu: 16, memory: 64Gi) exceed maximum single-node allocatable capacity (8 vCPU, 32Gi).",
+      "expected_root_cause_category": "SCHEDULING_NODE_FAILURE",
+      "expected_subtype": "INSUFFICIENT_CPU",
+      "expected_severity": "HIGH",
+      "expected_impacted_resources": [
+        "fraud-detection-model-9a8b7c6d5-p4l2k"
+      ],
+      "expected_namespace": "risk-engine",
+      "expected_container": "inference-server",
+      "expected_node": "cluster-scheduler",
+      "ground_truth_rca": "Pod 'fraud-detection-model-9a8b7c6d5-p4l2k' is stuck in Pending state because its container resource requests (16 CPU cores, 64Gi RAM) exceed the allocatable capacity of all 6 worker nodes ('0/6 nodes are available: 4 Insufficient cpu, 6 Insufficient memory').",
+      "ground_truth_evidence_keywords": [
+        "FailedScheduling",
+        "0/6 nodes are available",
+        "Insufficient cpu",
+        "Insufficient memory"
+      ],
+      "expected_remediation_commands": [
+        "kubectl describe nodes | grep -A 8 'Allocated resources'",
+        "kubectl set resources deployment/<deployment-name> --requests=cpu=500m,memory=1Gi --limits=cpu=2000m,memory=2Gi"
+      ]
+    },
+    {
+      "id": "TC-09",
+      "slug": "service_no_endpoints",
+      "name": "Service Has No Endpoints (Label Selector Mismatch)",
+      "log_file": "logs/tc09_service_no_endpoints.log",
+      "scenario_description": "Kubernetes Service 'inventory-svc' in namespace 'fulfillment' is configured with label selector 'app=inventory-backend,tier=api', while the running Deployment pod 'inventory-service-5c6d7e8f9-t2w4y' (container 'inventory-api') has labels 'app=inventory-service,tier=backend'. Because zero pods match the selector, the Service's Endpoints object is empty ('Endpoints: <none>') and ingress requests fail with 'no endpoints available for service inventory-svc' (HTTP 503).",
+      "injected_fault": "Label selector mismatch between Service 'inventory-svc' (app=inventory-backend) and Deployment pods (app=inventory-service) results in 0 active Service endpoints.",
+      "expected_root_cause_category": "NETWORK_DNS_FAILURE",
+      "expected_subtype": "SERVICE_NO_ENDPOINTS",
+      "expected_severity": "HIGH",
+      "expected_impacted_resources": [
+        "inventory-service-5c6d7e8f9-t2w4y"
+      ],
+      "expected_namespace": "fulfillment",
+      "expected_container": "inventory-api",
+      "expected_node": "node-general-05",
+      "ground_truth_rca": "Kubernetes Service 'inventory-svc' in namespace 'fulfillment' has zero active endpoints ('Endpoints: <none>', 'no endpoints available for service \"inventory-svc\"') due to a label selector mismatch ('app=inventory-backend,tier=api') against pod 'inventory-service-5c6d7e8f9-t2w4y' ('app=inventory-service,tier=backend').",
+      "ground_truth_evidence_keywords": [
+        "no endpoints available for service",
+        "Endpoints: <none>",
+        "0 active endpoints",
+        "selector mismatch"
+      ],
+      "expected_remediation_commands": [
+        "kubectl get svc,endpoints,endpointslice -o wide && kubectl get pods --show-labels",
+        "kubectl patch svc <service-name> -p '{\"spec\":{\"selector\":{\"app\":\"<app-label>\"}}}'"
+      ]
+    },
+    {
+      "id": "TC-10",
+      "slug": "service_routes_unhealthy_pods",
+      "name": "Service Routes Traffic to Unhealthy Pods (publishNotReadyAddresses Enabled)",
+      "log_file": "logs/tc10_service_routes_unhealthy_pods.log",
+      "scenario_description": "Pod 'checkout-gateway-4e5f6a7b8-r9m1c' (container 'checkout-proxy', namespace 'payments') is failing its readiness checks because its local payment encryption HSM session is disconnected. However, Service 'checkout-gateway-svc' has 'publishNotReadyAddresses: true' set in its spec, forcing Kubernetes EndpointSlices to keep advertising the unready pod IP (10.244.4.91) as an active backend and routing live customer checkout traffic to the broken pod.",
+      "injected_fault": "Service 'checkout-gateway-svc' configured with spec.publishNotReadyAddresses: true, causing EndpointSlices and kube-proxy to route live traffic to unready pod 'checkout-gateway-4e5f6a7b8-r9m1c'.",
+      "expected_root_cause_category": "NETWORK_DNS_FAILURE",
+      "expected_subtype": "SERVICE_ROUTES_UNHEALTHY_PODS",
+      "expected_severity": "HIGH",
+      "expected_impacted_resources": [
+        "checkout-gateway-4e5f6a7b8-r9m1c"
+      ],
+      "expected_namespace": "payments",
+      "expected_container": "checkout-proxy",
+      "expected_node": "node-general-06",
+      "ground_truth_rca": "Service 'checkout-gateway-svc' in namespace 'payments' is routing live traffic to unhealthy/unready pod 'checkout-gateway-4e5f6a7b8-r9m1c' (10.244.4.91) because 'publishNotReadyAddresses: true' is enabled on the Service, bypassing readiness gating and causing HTTP 502/503 checkout failures.",
+      "ground_truth_evidence_keywords": [
+        "publishNotReadyAddresses: true",
+        "routing live traffic to unready pod",
+        "unready endpoint"
+      ],
+      "expected_remediation_commands": [
+        "kubectl patch svc <service-name> -p '{\"spec\":{\"publishNotReadyAddresses\":false}}'",
+        "kubectl get endpointslice -o wide && kubectl describe pod checkout-gateway-4e5f6a7b8-r9m1c"
+      ]
+    }
+  ]
+}

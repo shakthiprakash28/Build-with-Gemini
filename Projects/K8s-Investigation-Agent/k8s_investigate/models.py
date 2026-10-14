@@ -104,6 +104,7 @@ class Finding(BaseModel):
     evidence: List[EvidenceSnippet] = Field(default_factory=list)
     impacted_resources: List[str] = Field(default_factory=list)
     suggested_remediation: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TimelineEvent(BaseModel):

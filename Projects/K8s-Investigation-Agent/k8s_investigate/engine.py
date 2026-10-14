@@ -36,24 +36,83 @@ class InvestigationEngine:
 
     def analyze(self, entries: List[LogEntry], context: Optional[Dict[str, Any]] = None) -> InvestigationReport:
         """Executes full diagnostic pipeline over normalized log entries."""
+        import time
+
         start_time = datetime.now(timezone.utc)
-        context = context or {}
+        t_engine_start = time.perf_counter()
+        if context is None:
+            context = {}
 
         # 1. Run all diagnostic rules
+        t_rules_start = time.perf_counter()
         findings: List[Finding] = []
+        rule_evaluations: List[Dict[str, Any]] = []
         for rule in self.rules:
+            t_rule_0 = time.perf_counter()
             try:
                 finding = rule.evaluate(entries, context)
+                t_rule_ms = round((time.perf_counter() - t_rule_0) * 1000.0, 4)
                 if finding:
                     findings.append(finding)
+                    subtype = finding.metadata.get("subtype") or finding.metadata.get("network_subsystem")
+                    rule_evaluations.append({
+                        "rule_id": rule.rule_id,
+                        "rule_class": rule.__class__.__name__,
+                        "rule_title": rule.title,
+                        "category": rule.category.value,
+                        "matched": True,
+                        "duration_ms": t_rule_ms,
+                        "finding_id": finding.id,
+                        "finding_title": finding.title,
+                        "severity": finding.severity.value,
+                        "confidence": finding.confidence,
+                        "subtype": subtype,
+                        "primary_indicator": finding.primary_indicator,
+                        "evidence_count": len(finding.evidence),
+                        "evidence_line_ranges": [
+                            {"start_line": ev.start_line, "end_line": ev.end_line, "reason": ev.highlighted_reason}
+                            for ev in finding.evidence
+                        ],
+                    })
+                else:
+                    rule_evaluations.append({
+                        "rule_id": rule.rule_id,
+                        "rule_class": rule.__class__.__name__,
+                        "rule_title": rule.title,
+                        "category": rule.category.value,
+                        "matched": False,
+                        "duration_ms": t_rule_ms,
+                        "finding_id": None,
+                        "finding_title": None,
+                        "severity": None,
+                        "confidence": None,
+                        "subtype": None,
+                        "primary_indicator": None,
+                        "evidence_count": 0,
+                        "evidence_line_ranges": [],
+                    })
             except Exception as e:
+                t_rule_ms = round((time.perf_counter() - t_rule_0) * 1000.0, 4)
                 # Keep investigation resilient
                 context.setdefault("rule_errors", []).append(f"Rule {rule.rule_id} failed: {e}")
+                rule_evaluations.append({
+                    "rule_id": rule.rule_id,
+                    "rule_class": rule.__class__.__name__,
+                    "rule_title": rule.title,
+                    "category": rule.category.value,
+                    "matched": False,
+                    "duration_ms": t_rule_ms,
+                    "error": str(e),
+                })
+        t_rules_ms = round((time.perf_counter() - t_rules_start) * 1000.0, 4)
 
         # 2. Build Chronological Timeline
+        t_timeline_start = time.perf_counter()
         timeline = self._build_timeline(entries, findings)
+        t_timeline_ms = round((time.perf_counter() - t_timeline_start) * 1000.0, 4)
 
         # 3. Determine Root Cause and Causal Cascade
+        t_rca_start = time.perf_counter()
         root_cause = self._determine_root_cause(findings, timeline, entries)
         if root_cause and context.get("version_change_analysis"):
             v_info = context["version_change_analysis"]
@@ -65,12 +124,17 @@ class InvestigationEngine:
                         root_cause.causal_chain.insert(0, summary_note)
                 else:
                     root_cause.contributing_factors.append(summary_note)
+        t_rca_ms = round((time.perf_counter() - t_rca_start) * 1000.0, 4)
 
         # 4. Compute Blast Radius
+        t_blast_start = time.perf_counter()
         blast_radius = self._compute_blast_radius(entries, findings)
+        t_blast_ms = round((time.perf_counter() - t_blast_start) * 1000.0, 4)
 
         # 5. Generate Concrete Remediation Actions
+        t_rem_start = time.perf_counter()
         remediations = self._generate_remediations(root_cause, findings, blast_radius, context=context)
+        t_rem_ms = round((time.perf_counter() - t_rem_start) * 1000.0, 4)
 
         # Determine overall status
         if any(f.severity == Severity.CRITICAL for f in findings):
@@ -84,6 +148,22 @@ class InvestigationEngine:
 
         end_time = datetime.now(timezone.utc)
         exec_seconds = (end_time - start_time).total_seconds()
+        t_engine_ms = round((time.perf_counter() - t_engine_start) * 1000.0, 4)
+
+        context["_engine_trace"] = {
+            "rule_evaluations": rule_evaluations,
+            "rules_evaluated_count": len(rule_evaluations),
+            "rules_matched_count": sum(1 for r in rule_evaluations if r.get("matched")),
+            "matched_rule_ids": [r["rule_id"] for r in rule_evaluations if r.get("matched")],
+            "phase_timings_ms": {
+                "rule_evaluation_ms": t_rules_ms,
+                "timeline_construction_ms": t_timeline_ms,
+                "root_cause_resolution_ms": t_rca_ms,
+                "blast_radius_computation_ms": t_blast_ms,
+                "remediation_generation_ms": t_rem_ms,
+                "total_engine_ms": t_engine_ms,
+            },
+        }
 
         return InvestigationReport(
             investigation_id=f"k8s-inv-{uuid.uuid4().hex[:8]}",
@@ -201,28 +281,64 @@ class InvestigationEngine:
                 primary_finding_id=oom_finding.id,
             )
 
-        # Case 2: Network / DNS Failure -> Probe Failure -> CrashLoop
-        if FailureCategory.NETWORK_DNS_FAILURE in categories and (
-            FailureCategory.PROBE_FAILURE in categories or FailureCategory.CRASH_LOOP in categories
-        ):
+        # Case 2: Network / DNS / Service Endpoint Failure
+        if FailureCategory.NETWORK_DNS_FAILURE in categories:
             net_finding = categories[FailureCategory.NETWORK_DNS_FAILURE]
-            return RootCause(
-                category=FailureCategory.NETWORK_DNS_FAILURE,
-                summary="Network/DNS connection failure prevented health probes and caused service outage.",
-                confidence=0.94,
-                severity=Severity.HIGH,
-                causal_chain=[
-                    "Application failed to resolve upstream host or establish TCP connection (timeout/refused)",
-                    "Internal health checks or background workers failed",
-                    "Kubernetes Liveness/Readiness probes timed out or returned HTTP 5xx",
-                    "Kubelet failed container health checks and initiated termination/restart",
-                ],
-                contributing_factors=[
-                    "CoreDNS resolution failure or search domain exhaustion",
-                    "Downstream database/service outage or missing NetworkPolicy egress rule",
-                ],
-                primary_finding_id=net_finding.id,
-            )
+            subsys = net_finding.metadata.get("network_subsystem")
+            if subsys == "SERVICE_NO_ENDPOINTS":
+                return RootCause(
+                    category=FailureCategory.NETWORK_DNS_FAILURE,
+                    summary=net_finding.title,
+                    confidence=0.96,
+                    severity=Severity.HIGH,
+                    causal_chain=[
+                        "Kubernetes Service selector evaluated pod labels in target namespace",
+                        "Zero running/ready pods matched the Service label selector (or targetPort mismatch)",
+                        "EndpointSlice controller published empty endpoint set (Endpoints: <none>)",
+                        "kube-proxy / ingress rejected traffic with 'no endpoints available for service' (HTTP 503)",
+                    ],
+                    contributing_factors=[
+                        "Label selector mismatch between Service spec.selector and Deployment template.metadata.labels",
+                        "All backing pods failed readiness checks or scaled to zero",
+                    ],
+                    primary_finding_id=net_finding.id,
+                )
+            elif subsys == "SERVICE_ROUTES_UNHEALTHY_PODS":
+                return RootCause(
+                    category=FailureCategory.NETWORK_DNS_FAILURE,
+                    summary=net_finding.title,
+                    confidence=0.95,
+                    severity=Severity.HIGH,
+                    causal_chain=[
+                        "Backing pod failed readiness checks or entered unready state",
+                        "Service configured with publishNotReadyAddresses: true (or missing readiness gate enforcement)",
+                        "EndpointSlice continued advertising unready pod IP as an active backend",
+                        "Service/Ingress routed live client requests to unhealthy pod, causing HTTP 502/503 errors",
+                    ],
+                    contributing_factors=[
+                        "Misconfigured Service spec.publishNotReadyAddresses: true on client-facing service",
+                        "Missing or misconfigured readinessProbe allowing premature traffic routing",
+                    ],
+                    primary_finding_id=net_finding.id,
+                )
+            elif FailureCategory.PROBE_FAILURE in categories or FailureCategory.CRASH_LOOP in categories:
+                return RootCause(
+                    category=FailureCategory.NETWORK_DNS_FAILURE,
+                    summary="Network/DNS connection failure prevented health probes and caused service outage.",
+                    confidence=0.94,
+                    severity=Severity.HIGH,
+                    causal_chain=[
+                        "Application failed to resolve upstream host or establish TCP connection (timeout/refused)",
+                        "Internal health checks or background workers failed",
+                        "Kubernetes Liveness/Readiness probes timed out or returned HTTP 5xx",
+                        "Kubelet failed container health checks and initiated termination/restart",
+                    ],
+                    contributing_factors=[
+                        "CoreDNS resolution failure or search domain exhaustion",
+                        "Downstream database/service outage or missing NetworkPolicy egress rule",
+                    ],
+                    primary_finding_id=net_finding.id,
+                )
 
         # Case 3: RBAC Failure -> CrashLoop / App Failure
         if FailureCategory.RBAC_AUTH_FAILURE in categories:
@@ -308,9 +424,61 @@ class InvestigationEngine:
                 primary_finding_id=storage_finding.id,
             )
 
-        # Case 6: Scheduling Failure
+        # Case 6: Scheduling / Node / Resource Failure
         if FailureCategory.SCHEDULING_NODE_FAILURE in categories:
             sched_finding = categories[FailureCategory.SCHEDULING_NODE_FAILURE]
+            subtype = sched_finding.metadata.get("subtype")
+            if subtype == "CPU_THROTTLING":
+                return RootCause(
+                    category=FailureCategory.SCHEDULING_NODE_FAILURE,
+                    summary=sched_finding.title,
+                    confidence=0.94,
+                    severity=Severity.HIGH,
+                    causal_chain=[
+                        "Container CPU usage exceeded configured CFS quota within enforcement period (cpu.cfs_period_us)",
+                        "Linux kernel CFS bandwidth controller throttled runnable container threads (nr_throttled / throttled_time spike)",
+                        "Application request processing latency spiked and worker threads stalled",
+                    ],
+                    contributing_factors=[
+                        "Restrictive container resources.limits.cpu relative to burst concurrency",
+                        "Multi-threaded runtime spinning more OS threads than allocated CPU quota",
+                    ],
+                    primary_finding_id=sched_finding.id,
+                )
+            elif subtype == "NODE_MEMORY_PRESSURE":
+                return RootCause(
+                    category=FailureCategory.SCHEDULING_NODE_FAILURE,
+                    summary=sched_finding.title,
+                    confidence=0.96,
+                    severity=Severity.CRITICAL,
+                    causal_chain=[
+                        "Available memory on worker node dropped below kubelet eviction threshold (memory.available<100Mi)",
+                        "Kubelet transitioned node condition MemoryPressure to True",
+                        "Kubelet eviction manager ranked pods by QoS class and evicted workload pods (Reason: Evicted)",
+                    ],
+                    contributing_factors=[
+                        "Burstable/BestEffort pods consuming excessive node memory without proportionate requests",
+                        "System daemons or co-located workloads exhausting host RAM",
+                    ],
+                    primary_finding_id=sched_finding.id,
+                )
+            elif subtype == "NODE_NOT_READY":
+                return RootCause(
+                    category=FailureCategory.SCHEDULING_NODE_FAILURE,
+                    summary=sched_finding.title,
+                    confidence=0.97,
+                    severity=Severity.CRITICAL,
+                    causal_chain=[
+                        "Container runtime (containerd/CRI) or Pod Lifecycle Event Generator (PLEG) became unresponsive on worker node",
+                        "Kubelet failed PLEG relist health check and stopped posting Ready status",
+                        "NodeController marked node NodeNotReady and initiated pod evictions",
+                    ],
+                    contributing_factors=[
+                        "Container runtime daemon deadlock or heavy disk I/O blocking CRI socket operations",
+                        "Host kernel resource starvation or CNI plugin hang",
+                    ],
+                    primary_finding_id=sched_finding.id,
+                )
             return RootCause(
                 category=FailureCategory.SCHEDULING_NODE_FAILURE,
                 summary="Kubernetes scheduler could not assign pod to any node (Resource starvation / Taints).",
@@ -423,6 +591,20 @@ class InvestigationEngine:
                 explanation="Identifies memory leaks, unclosed database connection pools, or runaway caching algorithms.",
             ))
 
+        elif cat == FailureCategory.APPLICATION_PANIC:
+            actions.append(RemediationAction(
+                action_type="immediate_mitigation",
+                description="Inspect the crash stack trace from the terminated container logs.",
+                kubectl_command=f"kubectl logs {target_pod} --previous",
+                explanation="Captures the unhandled exception or runtime panic stack trace from the crashed container.",
+            ))
+            actions.append(RemediationAction(
+                action_type="permanent_fix",
+                description="Inspect pod termination state, exit code, and environment configuration.",
+                kubectl_command=f"kubectl describe pod {target_pod}",
+                explanation="Verifies container exit code, ConfigMap/Secret mounts, and deployment revision.",
+            ))
+
         elif cat == FailureCategory.CRASH_LOOP:
             actions.append(RemediationAction(
                 action_type="immediate_mitigation",
@@ -440,16 +622,17 @@ class InvestigationEngine:
         elif cat == FailureCategory.PROBE_FAILURE:
             actions.append(RemediationAction(
                 action_type="immediate_mitigation",
-                description="Increase probe timeout and failure threshold to prevent false restarts.",
-                yaml_patch="""livenessProbe:
+                description="Inspect probe configuration and correct readiness/liveness path, port, or timeout.",
+                kubectl_command=f"kubectl describe pod {target_pod} | grep -A 10 -E 'Liveness|Readiness|Events'",
+                yaml_patch="""readinessProbe:
   httpGet:
     path: /healthz
     port: 8080
-  initialDelaySeconds: 30
+  initialDelaySeconds: 15
   periodSeconds: 10
   timeoutSeconds: 5
-  failureThreshold: 5""",
-                explanation="Gives the application more time to respond when undergoing high load or startup initialization.",
+  failureThreshold: 3""",
+                explanation="Verifies the configured probe endpoint and gives the application sufficient time to respond.",
             ))
             actions.append(RemediationAction(
                 action_type="permanent_fix",
@@ -460,22 +643,54 @@ class InvestigationEngine:
     port: 8080
   failureThreshold: 30
   periodSeconds: 10""",
-                explanation="Ensures livenessProbe does not begin checking until the application is fully initialized.",
+                explanation="Ensures readiness/liveness probes do not fail while the application is still initializing.",
             ))
 
         elif cat == FailureCategory.NETWORK_DNS_FAILURE:
-            actions.append(RemediationAction(
-                action_type="immediate_mitigation",
-                description="Verify CoreDNS pods health in kube-system namespace.",
-                kubectl_command="kubectl -n kube-system get pods -l k8s-app=kube-dns -o wide",
-                explanation="Ensures cluster DNS pods are running and healthy.",
-            ))
-            actions.append(RemediationAction(
-                action_type="permanent_fix",
-                description="Test DNS resolution directly inside a cluster pod.",
-                kubectl_command="kubectl run dns-test --rm -it --restart=Never --image=busybox -- nslookup kubernetes.default",
-                explanation="Tests whether cluster DNS resolution functions from inside the pod network.",
-            ))
+            net_subsys = None
+            for f in findings:
+                if f.category == FailureCategory.NETWORK_DNS_FAILURE:
+                    net_subsys = f.metadata.get("network_subsystem")
+                    break
+            if net_subsys == "SERVICE_NO_ENDPOINTS":
+                actions.append(RemediationAction(
+                    action_type="immediate_mitigation",
+                    description="Compare Service label selector against pod labels and inspect Endpoints.",
+                    kubectl_command="kubectl get svc,endpoints,endpointslice -o wide && kubectl get pods --show-labels",
+                    explanation="Identifies selector mismatches or unready pods causing the Service to have 0 endpoints.",
+                ))
+                actions.append(RemediationAction(
+                    action_type="permanent_fix",
+                    description="Patch Service selector to match the Deployment pod template labels.",
+                    kubectl_command="kubectl patch svc <service-name> -p '{\"spec\":{\"selector\":{\"app\":\"<app-label>\"}}}'",
+                    explanation="Aligns the Service label selector with running pods so EndpointSlices populate immediately.",
+                ))
+            elif net_subsys == "SERVICE_ROUTES_UNHEALTHY_PODS":
+                actions.append(RemediationAction(
+                    action_type="immediate_mitigation",
+                    description="Disable publishNotReadyAddresses on the Service so unready pods are excluded from load balancing.",
+                    kubectl_command="kubectl patch svc <service-name> -p '{\"spec\":{\"publishNotReadyAddresses\":false}}'",
+                    explanation="Ensures kube-proxy and Ingress controllers only route traffic to pods passing readiness probes.",
+                ))
+                actions.append(RemediationAction(
+                    action_type="permanent_fix",
+                    description="Configure a strict readinessProbe verifying application dependency health.",
+                    kubectl_command=f"kubectl get endpointslice -o wide && kubectl describe pod {target_pod}",
+                    explanation="Removes unhealthy pods from Service EndpointSlices immediately when readiness checks fail.",
+                ))
+            else:
+                actions.append(RemediationAction(
+                    action_type="immediate_mitigation",
+                    description="Verify CoreDNS pods health in kube-system namespace.",
+                    kubectl_command="kubectl -n kube-system get pods -l k8s-app=kube-dns -o wide",
+                    explanation="Ensures cluster DNS pods are running and healthy.",
+                ))
+                actions.append(RemediationAction(
+                    action_type="permanent_fix",
+                    description="Test DNS resolution directly inside a cluster pod.",
+                    kubectl_command="kubectl run dns-test --rm -it --restart=Never --image=busybox -- nslookup kubernetes.default",
+                    explanation="Tests whether cluster DNS resolution functions from inside the pod network.",
+                ))
 
         elif cat == FailureCategory.IMAGE_PULL_FAILURE:
             is_tag_not_found = False
@@ -559,12 +774,64 @@ roleRef:
             ))
 
         elif cat == FailureCategory.SCHEDULING_NODE_FAILURE:
-            actions.append(RemediationAction(
-                action_type="immediate_mitigation",
-                description="Inspect node resource capacity and pod resource requests.",
-                kubectl_command="kubectl describe nodes | grep -A 8 'Allocated resources'",
-                explanation="Identifies which nodes have exhausted CPU or memory capacity.",
-            ))
+            sched_subtype = None
+            for f in findings:
+                if f.category == FailureCategory.SCHEDULING_NODE_FAILURE:
+                    sched_subtype = f.metadata.get("subtype")
+                    break
+            target_node = blast_radius.nodes_affected[0] if blast_radius.nodes_affected else "<node-name>"
+            if sched_subtype == "CPU_THROTTLING":
+                actions.append(RemediationAction(
+                    action_type="immediate_mitigation",
+                    description="Increase or remove restrictive CPU CFS limit on the throttled container.",
+                    kubectl_command="kubectl set resources deployment/<deployment-name> --limits=cpu=2000m --requests=cpu=500m",
+                    explanation="Raises the CFS bandwidth quota so burst threads are not throttled during request spikes.",
+                ))
+                actions.append(RemediationAction(
+                    action_type="permanent_fix",
+                    description="Monitor container CPU usage and tune runtime thread pool concurrency (GOMAXPROCS / UV_THREADPOOL_SIZE).",
+                    kubectl_command=f"kubectl top pod {target_pod} --containers",
+                    explanation="Aligns application worker thread counts with allocated Kubernetes CPU requests/limits.",
+                ))
+            elif sched_subtype == "NODE_MEMORY_PRESSURE":
+                actions.append(RemediationAction(
+                    action_type="immediate_mitigation",
+                    description="Inspect node MemoryPressure condition, allocatable memory, and evicted pods.",
+                    kubectl_command=f"kubectl describe node {target_node} | grep -A 15 -E 'Conditions:|Allocated resources:'",
+                    explanation="Identifies memory exhaustion on the worker node and pods consuming excess RAM.",
+                ))
+                actions.append(RemediationAction(
+                    action_type="permanent_fix",
+                    description="Clean up evicted pods and set accurate memory requests/limits across workloads.",
+                    kubectl_command="kubectl get pods -A --field-selector=status.phase=Failed -o wide",
+                    explanation="Ensures kube-scheduler accounts for actual memory footprint and prevents node overcommitment.",
+                ))
+            elif sched_subtype == "NODE_NOT_READY":
+                actions.append(RemediationAction(
+                    action_type="immediate_mitigation",
+                    description="Cordon and drain the unhealthy node to reschedule affected workloads onto healthy nodes.",
+                    kubectl_command=f"kubectl cordon {target_node} && kubectl drain {target_node} --ignore-daemonsets --delete-emptydir-data",
+                    explanation="Prevents new pods from scheduling on the NotReady node and safely migrates existing pods.",
+                ))
+                actions.append(RemediationAction(
+                    action_type="permanent_fix",
+                    description="Inspect kubelet and containerd daemon health on the affected worker node.",
+                    kubectl_command=f"kubectl describe node {target_node} | grep -A 12 'Conditions:'",
+                    explanation="Diagnoses PLEG relist timeouts, containerd socket hangs, or disk I/O bottlenecks.",
+                ))
+            else:
+                actions.append(RemediationAction(
+                    action_type="immediate_mitigation",
+                    description="Inspect node resource capacity and pod resource requests.",
+                    kubectl_command="kubectl describe nodes | grep -A 8 'Allocated resources'",
+                    explanation="Identifies which nodes have exhausted CPU or memory capacity.",
+                ))
+                actions.append(RemediationAction(
+                    action_type="permanent_fix",
+                    description="Right-size excessive pod resource requests or scale out the worker node group.",
+                    kubectl_command="kubectl set resources deployment/<deployment-name> --requests=cpu=500m,memory=1Gi --limits=cpu=2000m,memory=2Gi",
+                    explanation="Reduces oversized CPU/memory requests so the pod fits within node allocatable capacity.",
+                ))
 
         elif cat == FailureCategory.STORAGE_PVC_FAILURE:
             actions.append(RemediationAction(

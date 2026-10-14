@@ -1,0 +1,628 @@
+{
+  "trace_id": "trace-tc-03-container_crash",
+  "sequence_number": 3,
+  "test_case": {
+    "id": "TC-03",
+    "slug": "container_crash",
+    "name": "Container Crash (Unhandled Runtime Panic / SIGSEGV)",
+    "log_file": "logs/tc03_container_crash.log",
+    "scenario_description": "An invoice batch worker container ('invoice-worker') in pod 'invoice-generator-5f7b8d9c1-q4n8w' (namespace 'billing') crashes mid-execution due to an unhandled nil pointer dereference (SIGSEGV) when processing an invoice record with a null tax jurisdiction object. The container terminates immediately with exit code 2.",
+    "injected_fault": "Null tax_jurisdiction struct dereferenced in CalculateRegionalTax(), triggering Go runtime SIGSEGV panic and container exit code 2.",
+    "ground_truth_rca": "Container 'invoice-worker' in pod 'invoice-generator-5f7b8d9c1-q4n8w' crashed with exit code 2 due to an unhandled Go runtime nil pointer dereference panic (SIGSEGV) in billing/tax.CalculateRegionalTax() at invoice_processor.go:142."
+  },
+  "agent_input": {
+    "prompt": "Investigate the Kubernetes incident for pod invoice-generator-5f7b8d9c1-q4n8w in namespace billing",
+    "extracted_pod": "invoice-generator-5f7b8d9c1-q4n8w",
+    "extracted_namespace": "billing",
+    "container": "invoice-worker"
+  },
+  "execution_metrics": {
+    "investigation_id": "k8s-inv-a3c3fb97",
+    "started_at": "2026-10-14T23:42:02.429561+00:00",
+    "completed_at": "2026-10-14T23:42:02.440028+00:00",
+    "total_duration_ms": 10.464,
+    "engine_duration_ms": 8.251,
+    "phase_timings_ms": {
+      "rule_evaluation_ms": 8.0166,
+      "timeline_construction_ms": 0.1358,
+      "root_cause_resolution_ms": 0.0355,
+      "blast_radius_computation_ms": 0.0237,
+      "remediation_generation_ms": 0.0165,
+      "total_engine_ms": 8.251
+    },
+    "total_steps": 9,
+    "tools_invoked_count": 3,
+    "tools_invoked": [
+      "get_pod_logs",
+      "get_pod_events",
+      "get_deployment_history"
+    ],
+    "total_log_lines": 8,
+    "parsed_entries": 8,
+    "rules_evaluated": 9,
+    "rules_matched": 2,
+    "matched_rule_ids": [
+      "RULE_K8S_CRASHLOOP_BACKOFF",
+      "RULE_APPLICATION_PANIC_EXCEPTION"
+    ]
+  },
+  "trace_steps": [
+    {
+      "step_index": 1,
+      "step_type": "target_extraction",
+      "component": "KubernetesInvestigationAgent._extract_pod_target",
+      "status": "SUCCESS",
+      "duration_ms": 0.0524,
+      "input": {
+        "prompt": "Investigate the Kubernetes incident for pod invoice-generator-5f7b8d9c1-q4n8w in namespace billing",
+        "default_namespace": null
+      },
+      "output": {
+        "pod_name": "invoice-generator-5f7b8d9c1-q4n8w",
+        "namespace": "billing"
+      }
+    },
+    {
+      "step_index": 2,
+      "step_type": "tool_call",
+      "tool_name": "get_pod_logs",
+      "status": "SUCCESS",
+      "duration_ms": 0.0041,
+      "arguments": {
+        "pod_name": "invoice-generator-5f7b8d9c1-q4n8w",
+        "namespace": "billing",
+        "container": "invoice-worker",
+        "previous": false,
+        "tail_lines": null
+      },
+      "output_summary": {
+        "line_count": 8,
+        "char_count": 1655,
+        "preview_lines": [
+          "2026-10-14T10:05:00.120Z INFO pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 Starting invoice-worker v3.1.2 batch job (batch_id=INV-2026-10-14-A)",
+          "2026-10-14T10:05:03.410Z INFO pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 Processed 140/500 invoices in batch INV-2026-10-14-A",
+          "2026-10-14T10:05:04.892Z WARN pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 Invoice record id=inv_994821 has empty tax_jurisdiction metadata; proceeding with default rate lookup",
+          "2026-10-14T10:05:04.895Z FATAL pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 panic: runtime error: invalid memory address or nil pointer dereference",
+          "2026-10-14T10:05:04.895Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 [signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x7f4a2b]"
+        ]
+      }
+    },
+    {
+      "step_index": 3,
+      "step_type": "tool_call",
+      "tool_name": "get_pod_events",
+      "status": "SUCCESS",
+      "duration_ms": 0.0018,
+      "arguments": {
+        "pod_name": "invoice-generator-5f7b8d9c1-q4n8w",
+        "namespace": "billing"
+      },
+      "output_summary": {
+        "line_count": 1,
+        "char_count": 210,
+        "preview_lines": [
+          "2026-10-14T10:05:05.210Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 kubelet: Container invoice-worker terminated with exit code 2 (Reason: Error)"
+        ]
+      }
+    },
+    {
+      "step_index": 4,
+      "step_type": "tool_call",
+      "tool_name": "get_deployment_history",
+      "status": "SUCCESS",
+      "duration_ms": 0.0026,
+      "arguments": {
+        "deployment_name": "invoice-generator-5f7b8d9c1-q4n8w",
+        "namespace": "billing",
+        "pod_name": "invoice-generator-5f7b8d9c1-q4n8w"
+      },
+      "output_summary": {
+        "line_count": 8,
+        "char_count": 287,
+        "preview_lines": [
+          "deployment.apps/invoice-generator",
+          "REVISION  CHANGE-CAUSE",
+          "1         kubectl apply --filename=invoice-generator-deployment.yaml",
+          "deployment.apps/invoice-generator with revision #1",
+          "Pod Template:"
+        ]
+      }
+    },
+    {
+      "step_index": 5,
+      "step_type": "log_parsing",
+      "component": "LogParser.parse_text",
+      "status": "SUCCESS",
+      "duration_ms": 1.9787,
+      "output_summary": {
+        "total_raw_lines": 8,
+        "parsed_entries_count": 8,
+        "level_distribution": {
+          "INFO": 2,
+          "WARN": 1,
+          "FATAL": 1,
+          "ERROR": 4
+        },
+        "detected_components": [
+          "running"
+        ],
+        "stack_trace_entries": 2
+      }
+    },
+    {
+      "step_index": 6,
+      "step_type": "diagnostic_rule_evaluation",
+      "component": "InvestigationEngine.rules",
+      "status": "SUCCESS",
+      "duration_ms": 8.0166,
+      "rules_evaluated_count": 9,
+      "rules_matched_count": 2,
+      "matched_rule_ids": [
+        "RULE_K8S_CRASHLOOP_BACKOFF",
+        "RULE_APPLICATION_PANIC_EXCEPTION"
+      ],
+      "rule_evaluations": [
+        {
+          "rule_id": "RULE_K8S_OOM_KILL",
+          "rule_class": "OOMKillRule",
+          "rule_title": "Container Terminated Due To Out-Of-Memory (OOMKilled / Exit 137)",
+          "category": "OOM_KILL",
+          "matched": false,
+          "duration_ms": 1.4133,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_CRASHLOOP_BACKOFF",
+          "rule_class": "CrashLoopRule",
+          "rule_title": "Pod In CrashLoopBackOff / Repeated Process Failure",
+          "category": "CRASH_LOOP",
+          "matched": true,
+          "duration_ms": 1.0485,
+          "finding_id": "RULE_K8S_CRASHLOOP_BACKOFF",
+          "finding_title": "Pod In CrashLoopBackOff / Repeated Process Failure",
+          "severity": "HIGH",
+          "confidence": 0.85,
+          "subtype": null,
+          "primary_indicator": "CrashLoopBackOff (Identified exit codes: 2)",
+          "evidence_count": 2,
+          "evidence_line_ranges": [
+            {
+              "start_line": 4,
+              "end_line": 6,
+              "reason": "Container failure / CrashLoop indicator: 'SIGSEGV: segmentation violation'"
+            },
+            {
+              "start_line": 7,
+              "end_line": 8,
+              "reason": "Container failure / CrashLoop indicator: 'terminated with exit code 2'"
+            }
+          ]
+        },
+        {
+          "rule_id": "RULE_K8S_PROBE_FAILURE",
+          "rule_class": "ProbeFailureRule",
+          "rule_title": "Kubernetes Health Check (Liveness/Readiness/Startup) Probe Failed",
+          "category": "PROBE_FAILURE",
+          "matched": false,
+          "duration_ms": 0.4205,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_NETWORK_DNS_FAILURE",
+          "rule_class": "NetworkFailureRule",
+          "rule_title": "Network, Service Endpoint, DNS, or TCP Connection Failure",
+          "category": "NETWORK_DNS_FAILURE",
+          "matched": false,
+          "duration_ms": 1.9425,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_IMAGE_PULL_FAILURE",
+          "rule_class": "ImagePullRule",
+          "rule_title": "Container Image Pull Failure (ImagePullBackOff / ErrImagePull)",
+          "category": "IMAGE_PULL_FAILURE",
+          "matched": false,
+          "duration_ms": 0.685,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_STORAGE_PVC_FAILURE",
+          "rule_class": "StorageRule",
+          "rule_title": "Persistent Volume / Storage Mount Failure (FailedMount / Multi-Attach)",
+          "category": "STORAGE_PVC_FAILURE",
+          "matched": false,
+          "duration_ms": 0.4082,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_SCHEDULING_FAILURE",
+          "rule_class": "SchedulingRule",
+          "rule_title": "Pod Scheduling Failure / Node Resource Pressure / CPU Throttling",
+          "category": "SCHEDULING_NODE_FAILURE",
+          "matched": false,
+          "duration_ms": 1.1863,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_RBAC_FAILURE",
+          "rule_class": "RBACRule",
+          "rule_title": "Kubernetes RBAC Authorization / Permission Denied (403 Forbidden)",
+          "category": "RBAC_AUTH_FAILURE",
+          "matched": false,
+          "duration_ms": 0.4227,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_APPLICATION_PANIC_EXCEPTION",
+          "rule_class": "ApplicationPanicRule",
+          "rule_title": "Application Fatal Exception or Runtime Panic",
+          "category": "APPLICATION_PANIC",
+          "matched": true,
+          "duration_ms": 0.4191,
+          "finding_id": "RULE_APPLICATION_PANIC_EXCEPTION",
+          "finding_title": "Application Crash: Go Runtime Panic",
+          "severity": "HIGH",
+          "confidence": 0.9,
+          "subtype": null,
+          "primary_indicator": "panic: runtime error: invalid memory address or nil pointer dereference",
+          "evidence_count": 1,
+          "evidence_line_ranges": [
+            {
+              "start_line": 3,
+              "end_line": 7,
+              "reason": "Application crashed with stack trace / panic: 'panic: runtime error: invalid memory address or nil pointer dereference'"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "step_index": 7,
+      "step_type": "causal_root_cause_resolution",
+      "component": "InvestigationEngine._determine_root_cause",
+      "status": "SUCCESS",
+      "duration_ms": 0.0355,
+      "output_summary": {
+        "category": "APPLICATION_PANIC",
+        "subtype": null,
+        "severity": "HIGH",
+        "confidence": 0.9,
+        "primary_finding_id": "RULE_APPLICATION_PANIC_EXCEPTION",
+        "summary": "Application Crash: Go Runtime Panic",
+        "causal_chain": [
+          "The application process raised an unhandled exception or panic [Go Runtime Panic]. The error caused the main process thread to crash, terminating the container."
+        ]
+      }
+    },
+    {
+      "step_index": 8,
+      "step_type": "blast_radius_computation",
+      "component": "InvestigationEngine._compute_blast_radius",
+      "status": "SUCCESS",
+      "duration_ms": 0.0237,
+      "output_summary": {
+        "pods_affected": [
+          "invoice-generator-5f7b8d9c1-q4n8w"
+        ],
+        "containers_affected": [
+          "invoice-worker"
+        ],
+        "namespaces_affected": [
+          "billing"
+        ],
+        "nodes_affected": [
+          "node-general-01"
+        ],
+        "services_affected": [],
+        "estimated_service_impact": "Single Pod Affected"
+      }
+    },
+    {
+      "step_index": 9,
+      "step_type": "remediation_generation",
+      "component": "InvestigationEngine._generate_remediations",
+      "status": "SUCCESS",
+      "duration_ms": 0.0165,
+      "output_summary": {
+        "remediation_count": 2,
+        "kubectl_commands": [
+          "kubectl logs invoice-generator-5f7b8d9c1-q4n8w --previous",
+          "kubectl describe pod invoice-generator-5f7b8d9c1-q4n8w"
+        ]
+      }
+    }
+  ],
+  "agent_output": {
+    "overall_status": "HIGH_SEVERITY_INCIDENT",
+    "root_cause": {
+      "category": "APPLICATION_PANIC",
+      "summary": "Application Crash: Go Runtime Panic",
+      "confidence": 0.9,
+      "severity": "HIGH",
+      "causal_chain": [
+        "The application process raised an unhandled exception or panic [Go Runtime Panic]. The error caused the main process thread to crash, terminating the container."
+      ],
+      "contributing_factors": [
+        "See detailed finding and evidence snippets below",
+        "Deployment 'invoice-generator' is on revision #1 with image 'registry.internal/billing/invoice-worker:v3.1.2' (no recent version change)."
+      ],
+      "primary_finding_id": "RULE_APPLICATION_PANIC_EXCEPTION"
+    },
+    "blast_radius": {
+      "pods_affected": [
+        "invoice-generator-5f7b8d9c1-q4n8w"
+      ],
+      "containers_affected": [
+        "invoice-worker"
+      ],
+      "namespaces_affected": [
+        "billing"
+      ],
+      "nodes_affected": [
+        "node-general-01"
+      ],
+      "services_affected": [],
+      "estimated_service_impact": "Single Pod Affected"
+    },
+    "findings": [
+      {
+        "id": "RULE_K8S_CRASHLOOP_BACKOFF",
+        "category": "CRASH_LOOP",
+        "title": "Pod In CrashLoopBackOff / Repeated Process Failure",
+        "severity": "HIGH",
+        "description": "The container is repeatedly failing and entering CrashLoopBackOff (Identified exit codes: 2). Kubernetes applies an exponential back-off delay (10s, 20s, 40s ... up to 5m) before attempting to restart the container.",
+        "confidence": 0.85,
+        "primary_indicator": "CrashLoopBackOff (Identified exit codes: 2)",
+        "evidence": [
+          {
+            "start_line": 4,
+            "end_line": 6,
+            "raw_lines": [
+              "[L4] 2026-10-14T10:05:04.895Z FATAL pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 panic: runtime error: invalid memory address or nil pointer dereference\n2026-10-14T10:05:04.895Z FATAL pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 panic: runtime error: invalid memory address or nil pointer dereference",
+              "[L5] 2026-10-14T10:05:04.895Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 [signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x7f4a2b]",
+              "[L6] 2026-10-14T10:05:04.896Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 goroutine 42 [running]:\n2026-10-14T10:05:04.896Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 goroutine 42 [running]:"
+            ],
+            "timestamp": "2026-10-14T10:05:04.895000Z",
+            "highlighted_reason": "Container failure / CrashLoop indicator: 'SIGSEGV: segmentation violation'",
+            "extracted_params": {}
+          },
+          {
+            "start_line": 7,
+            "end_line": 8,
+            "raw_lines": [
+              "[L7] 2026-10-14T10:05:04.896Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 github.com/acme/billing/internal/tax.CalculateRegionalTax(0x0, 0xc000214800) /app/internal/tax/invoice_processor.go:142 +0x5b",
+              "[L8] 2026-10-14T10:05:05.210Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 kubelet: Container invoice-worker terminated with exit code 2 (Reason: Error)"
+            ],
+            "timestamp": "2026-10-14T10:05:05.210000Z",
+            "highlighted_reason": "Container failure / CrashLoop indicator: 'terminated with exit code 2'",
+            "extracted_params": {
+              "exit_code": "2",
+              "exit_meaning": "Misuse of shell built-ins or command syntax error."
+            }
+          }
+        ],
+        "impacted_resources": [
+          "invoice-generator-5f7b8d9c1-q4n8w"
+        ],
+        "suggested_remediation": [
+          "Fetch previous terminated container logs: `kubectl logs <pod-name> --previous` or `kubectl logs <pod-name> -c <container> -p`.",
+          "Describe the pod to review the termination state, last exit code, and message: `kubectl describe pod <pod-name>`.",
+          "Verify container entrypoint and command syntax in deployment specification.",
+          "Run an interactive debug shell in a clone container: `kubectl debug <pod-name> -it --image=busybox`."
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "RULE_APPLICATION_PANIC_EXCEPTION",
+        "category": "APPLICATION_PANIC",
+        "title": "Application Crash: Go Runtime Panic",
+        "severity": "HIGH",
+        "description": "The application process raised an unhandled exception or panic [Go Runtime Panic]. The error caused the main process thread to crash, terminating the container.",
+        "confidence": 0.9,
+        "primary_indicator": "panic: runtime error: invalid memory address or nil pointer dereference",
+        "evidence": [
+          {
+            "start_line": 3,
+            "end_line": 7,
+            "raw_lines": [
+              "[L3] 2026-10-14T10:05:04.892Z WARN pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 Invoice record id=inv_994821 has empty tax_jurisdiction metadata; proceeding with default rate lookup",
+              "[L4] 2026-10-14T10:05:04.895Z FATAL pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 panic: runtime error: invalid memory address or nil pointer dereference\n2026-10-14T10:05:04.895Z FATAL pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 panic: runtime error: invalid memory address or nil pointer dereference",
+              "[L5] 2026-10-14T10:05:04.895Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 [signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x7f4a2b]",
+              "[L6] 2026-10-14T10:05:04.896Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 goroutine 42 [running]:\n2026-10-14T10:05:04.896Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 goroutine 42 [running]:",
+              "[L7] 2026-10-14T10:05:04.896Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 github.com/acme/billing/internal/tax.CalculateRegionalTax(0x0, 0xc000214800) /app/internal/tax/invoice_processor.go:142 +0x5b"
+            ],
+            "timestamp": "2026-10-14T10:05:04.895000Z",
+            "highlighted_reason": "Application crashed with stack trace / panic: 'panic: runtime error: invalid memory address or nil pointer dereference'",
+            "extracted_params": {
+              "matched_pattern": "panic:\\s*([^\\n]+)"
+            }
+          }
+        ],
+        "impacted_resources": [
+          "invoice-generator-5f7b8d9c1-q4n8w"
+        ],
+        "suggested_remediation": [
+          "Inspect the logged stack trace to identify the faulty file and line number.",
+          "Verify application environment variables and configuration files mounted into the pod.",
+          "Ensure proper error handling (try-catch / recovery handlers) around external dependencies or unvalidated inputs."
+        ],
+        "metadata": {}
+      }
+    ],
+    "timeline": [
+      {
+        "timestamp": "2026-10-14T10:05:04.895000Z",
+        "relative_time_str": "2026-10-14 10:05:04",
+        "line_number": 4,
+        "event_type": "FATAL_ERROR",
+        "severity": "CRITICAL",
+        "summary": "2026-10-14T10:05:04.895Z FATAL pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing con",
+        "details": "2026-10-14T10:05:04.895Z FATAL pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 panic: runtime error: invalid memory address or nil pointer dereference\n2026-10-14T10:05:04.895Z FATAL pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 panic: runtime error: invalid memory address or nil pointer dereference",
+        "resource": "invoice-generator-5f7b8d9c1-q4n8w"
+      },
+      {
+        "timestamp": "2026-10-14T10:05:04.895000Z",
+        "relative_time_str": "2026-10-14 10:05:04",
+        "line_number": 5,
+        "event_type": "ERROR",
+        "severity": "HIGH",
+        "summary": "2026-10-14T10:05:04.895Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing con",
+        "details": "2026-10-14T10:05:04.895Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 [signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x7f4a2b]",
+        "resource": "invoice-generator-5f7b8d9c1-q4n8w"
+      },
+      {
+        "timestamp": "2026-10-14T10:05:04.896000Z",
+        "relative_time_str": "2026-10-14 10:05:04",
+        "line_number": 6,
+        "event_type": "ERROR",
+        "severity": "HIGH",
+        "summary": "2026-10-14T10:05:04.896Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing con",
+        "details": "2026-10-14T10:05:04.896Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 goroutine 42 [running]:\n2026-10-14T10:05:04.896Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 goroutine 42 [running]:",
+        "resource": "invoice-generator-5f7b8d9c1-q4n8w"
+      },
+      {
+        "timestamp": "2026-10-14T10:05:05.210000Z",
+        "relative_time_str": "2026-10-14 10:05:05",
+        "line_number": 8,
+        "event_type": "ERROR",
+        "severity": "HIGH",
+        "summary": "2026-10-14T10:05:05.210Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing con",
+        "details": "2026-10-14T10:05:05.210Z ERROR pod=invoice-generator-5f7b8d9c1-q4n8w namespace=billing container=invoice-worker node=node-general-01 kubelet: Container invoice-worker terminated with exit code 2 (Reason: Error)",
+        "resource": "invoice-generator-5f7b8d9c1-q4n8w"
+      }
+    ],
+    "remediations": [
+      {
+        "action_type": "immediate_mitigation",
+        "description": "Inspect the crash stack trace from the terminated container logs.",
+        "kubectl_command": "kubectl logs invoice-generator-5f7b8d9c1-q4n8w --previous",
+        "yaml_patch": null,
+        "explanation": "Captures the unhandled exception or runtime panic stack trace from the crashed container."
+      },
+      {
+        "action_type": "permanent_fix",
+        "description": "Inspect pod termination state, exit code, and environment configuration.",
+        "kubectl_command": "kubectl describe pod invoice-generator-5f7b8d9c1-q4n8w",
+        "yaml_patch": null,
+        "explanation": "Verifies container exit code, ConfigMap/Secret mounts, and deployment revision."
+      }
+    ]
+  },
+  "evaluation": {
+    "passed": true,
+    "score": 1.0,
+    "checks": {
+      "root_cause_category": {
+        "expected": "APPLICATION_PANIC",
+        "actual": "APPLICATION_PANIC",
+        "matched": true
+      },
+      "subtype": {
+        "expected": null,
+        "actual": null,
+        "matched": true
+      },
+      "severity": {
+        "expected": "HIGH",
+        "actual": "HIGH",
+        "matched": true
+      },
+      "blast_radius": {
+        "expected_pods": [
+          "invoice-generator-5f7b8d9c1-q4n8w"
+        ],
+        "actual_pods": [
+          "invoice-generator-5f7b8d9c1-q4n8w"
+        ],
+        "expected_namespace": "billing",
+        "actual_namespaces": [
+          "billing"
+        ],
+        "expected_container": "invoice-worker",
+        "actual_containers": [
+          "invoice-worker"
+        ],
+        "matched": true
+      },
+      "evidence_keywords": {
+        "expected": [
+          "panic: runtime error: invalid memory address or nil pointer dereference",
+          "SIGSEGV",
+          "goroutine",
+          "exit code 2"
+        ],
+        "matched_keywords": [
+          "panic: runtime error: invalid memory address or nil pointer dereference",
+          "SIGSEGV",
+          "goroutine",
+          "exit code 2"
+        ],
+        "matched": true
+      },
+      "remediation_commands": {
+        "expected": [
+          "kubectl logs invoice-generator-5f7b8d9c1-q4n8w --previous",
+          "kubectl describe pod invoice-generator-5f7b8d9c1-q4n8w"
+        ],
+        "matched_commands": [
+          "kubectl logs invoice-generator-5f7b8d9c1-q4n8w --previous",
+          "kubectl describe pod invoice-generator-5f7b8d9c1-q4n8w"
+        ],
+        "all_generated_commands": [
+          "kubectl logs invoice-generator-5f7b8d9c1-q4n8w --previous",
+          "kubectl describe pod invoice-generator-5f7b8d9c1-q4n8w"
+        ],
+        "matched": true
+      }
+    }
+  }
+}

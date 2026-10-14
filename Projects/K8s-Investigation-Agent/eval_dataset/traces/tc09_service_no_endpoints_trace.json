@@ -1,0 +1,586 @@
+{
+  "trace_id": "trace-tc-09-service_no_endpoints",
+  "sequence_number": 9,
+  "test_case": {
+    "id": "TC-09",
+    "slug": "service_no_endpoints",
+    "name": "Service Has No Endpoints (Label Selector Mismatch)",
+    "log_file": "logs/tc09_service_no_endpoints.log",
+    "scenario_description": "Kubernetes Service 'inventory-svc' in namespace 'fulfillment' is configured with label selector 'app=inventory-backend,tier=api', while the running Deployment pod 'inventory-service-5c6d7e8f9-t2w4y' (container 'inventory-api') has labels 'app=inventory-service,tier=backend'. Because zero pods match the selector, the Service's Endpoints object is empty ('Endpoints: <none>') and ingress requests fail with 'no endpoints available for service inventory-svc' (HTTP 503).",
+    "injected_fault": "Label selector mismatch between Service 'inventory-svc' (app=inventory-backend) and Deployment pods (app=inventory-service) results in 0 active Service endpoints.",
+    "ground_truth_rca": "Kubernetes Service 'inventory-svc' in namespace 'fulfillment' has zero active endpoints ('Endpoints: <none>', 'no endpoints available for service \"inventory-svc\"') due to a label selector mismatch ('app=inventory-backend,tier=api') against pod 'inventory-service-5c6d7e8f9-t2w4y' ('app=inventory-service,tier=backend')."
+  },
+  "agent_input": {
+    "prompt": "Investigate the Kubernetes incident for pod inventory-service-5c6d7e8f9-t2w4y in namespace fulfillment",
+    "extracted_pod": "inventory-service-5c6d7e8f9-t2w4y",
+    "extracted_namespace": "fulfillment",
+    "container": "inventory-api"
+  },
+  "execution_metrics": {
+    "investigation_id": "k8s-inv-9e9ea280",
+    "started_at": "2026-10-14T23:42:02.496172+00:00",
+    "completed_at": "2026-10-14T23:42:02.503264+00:00",
+    "total_duration_ms": 7.0872,
+    "engine_duration_ms": 5.4619,
+    "phase_timings_ms": {
+      "rule_evaluation_ms": 5.1505,
+      "timeline_construction_ms": 0.1511,
+      "root_cause_resolution_ms": 0.0504,
+      "blast_radius_computation_ms": 0.0371,
+      "remediation_generation_ms": 0.0347,
+      "total_engine_ms": 5.4619
+    },
+    "total_steps": 9,
+    "tools_invoked_count": 3,
+    "tools_invoked": [
+      "get_pod_logs",
+      "get_pod_events",
+      "get_deployment_history"
+    ],
+    "total_log_lines": 5,
+    "parsed_entries": 5,
+    "rules_evaluated": 9,
+    "rules_matched": 1,
+    "matched_rule_ids": [
+      "RULE_K8S_NETWORK_DNS_FAILURE"
+    ]
+  },
+  "trace_steps": [
+    {
+      "step_index": 1,
+      "step_type": "target_extraction",
+      "component": "KubernetesInvestigationAgent._extract_pod_target",
+      "status": "SUCCESS",
+      "duration_ms": 0.0538,
+      "input": {
+        "prompt": "Investigate the Kubernetes incident for pod inventory-service-5c6d7e8f9-t2w4y in namespace fulfillment",
+        "default_namespace": null
+      },
+      "output": {
+        "pod_name": "inventory-service-5c6d7e8f9-t2w4y",
+        "namespace": "fulfillment"
+      }
+    },
+    {
+      "step_index": 2,
+      "step_type": "tool_call",
+      "tool_name": "get_pod_logs",
+      "status": "SUCCESS",
+      "duration_ms": 0.0041,
+      "arguments": {
+        "pod_name": "inventory-service-5c6d7e8f9-t2w4y",
+        "namespace": "fulfillment",
+        "container": "inventory-api",
+        "previous": false,
+        "tail_lines": null
+      },
+      "output_summary": {
+        "line_count": 5,
+        "char_count": 1322,
+        "preview_lines": [
+          "2026-10-14T16:10:02.110Z INFO pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 Pod inventory-service-5c6d7e8f9-t2w4y is Running (1/1 Ready) with labels: app=inventory-service,tier=backend",
+          "2026-10-14T16:10:05.300Z WARN pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 endpointslice-controller: Service fulfillment/inventory-svc selector (app=inventory-backend,tier=api) matched 0 pods; selector mismatch detected against deployment inventory-service",
+          "2026-10-14T16:10:05.315Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 endpointslice-controller: Service inventory-svc has 0 active endpoints (Endpoints: <none>)",
+          "2026-10-14T16:10:12.780Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 ingress-nginx: connect() failed: no endpoints available for service \"inventory-svc\" while routing GET /api/v1/stock -> HTTP 503 Service Temporarily Unavailable",
+          "2026-10-14T16:10:18.920Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 kube-proxy: rejecting packet for service fulfillment/inventory-svc:80: service has no active endpoints"
+        ]
+      }
+    },
+    {
+      "step_index": 3,
+      "step_type": "tool_call",
+      "tool_name": "get_pod_events",
+      "status": "SUCCESS",
+      "duration_ms": 0.002,
+      "arguments": {
+        "pod_name": "inventory-service-5c6d7e8f9-t2w4y",
+        "namespace": "fulfillment"
+      },
+      "output_summary": {
+        "line_count": 3,
+        "char_count": 839,
+        "preview_lines": [
+          "2026-10-14T16:10:05.300Z WARN pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 endpointslice-controller: Service fulfillment/inventory-svc selector (app=inventory-backend,tier=api) matched 0 pods; selector mismatch detected against deployment inventory-service",
+          "2026-10-14T16:10:05.315Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 endpointslice-controller: Service inventory-svc has 0 active endpoints (Endpoints: <none>)",
+          "2026-10-14T16:10:12.780Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 ingress-nginx: connect() failed: no endpoints available for service \"inventory-svc\" while routing GET /api/v1/stock -> HTTP 503 Service Temporarily Unavailable"
+        ]
+      }
+    },
+    {
+      "step_index": 4,
+      "step_type": "tool_call",
+      "tool_name": "get_deployment_history",
+      "status": "SUCCESS",
+      "duration_ms": 0.0041,
+      "arguments": {
+        "deployment_name": "inventory-service-5c6d7e8f9-t2w4y",
+        "namespace": "fulfillment",
+        "pod_name": "inventory-service-5c6d7e8f9-t2w4y"
+      },
+      "output_summary": {
+        "line_count": 8,
+        "char_count": 289,
+        "preview_lines": [
+          "deployment.apps/inventory-service",
+          "REVISION  CHANGE-CAUSE",
+          "1         kubectl apply --filename=inventory-service-deployment.yaml",
+          "deployment.apps/inventory-service with revision #1",
+          "Pod Template:"
+        ]
+      }
+    },
+    {
+      "step_index": 5,
+      "step_type": "log_parsing",
+      "component": "LogParser.parse_text",
+      "status": "SUCCESS",
+      "duration_ms": 1.3104,
+      "output_summary": {
+        "total_raw_lines": 5,
+        "parsed_entries_count": 5,
+        "level_distribution": {
+          "INFO": 1,
+          "WARN": 1,
+          "ERROR": 3
+        },
+        "detected_components": [],
+        "stack_trace_entries": 0
+      }
+    },
+    {
+      "step_index": 6,
+      "step_type": "diagnostic_rule_evaluation",
+      "component": "InvestigationEngine.rules",
+      "status": "SUCCESS",
+      "duration_ms": 5.1505,
+      "rules_evaluated_count": 9,
+      "rules_matched_count": 1,
+      "matched_rule_ids": [
+        "RULE_K8S_NETWORK_DNS_FAILURE"
+      ],
+      "rule_evaluations": [
+        {
+          "rule_id": "RULE_K8S_OOM_KILL",
+          "rule_class": "OOMKillRule",
+          "rule_title": "Container Terminated Due To Out-Of-Memory (OOMKilled / Exit 137)",
+          "category": "OOM_KILL",
+          "matched": false,
+          "duration_ms": 0.9364,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_CRASHLOOP_BACKOFF",
+          "rule_class": "CrashLoopRule",
+          "rule_title": "Pod In CrashLoopBackOff / Repeated Process Failure",
+          "category": "CRASH_LOOP",
+          "matched": false,
+          "duration_ms": 0.7205,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_PROBE_FAILURE",
+          "rule_class": "ProbeFailureRule",
+          "rule_title": "Kubernetes Health Check (Liveness/Readiness/Startup) Probe Failed",
+          "category": "PROBE_FAILURE",
+          "matched": false,
+          "duration_ms": 0.2909,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_NETWORK_DNS_FAILURE",
+          "rule_class": "NetworkFailureRule",
+          "rule_title": "Network, Service Endpoint, DNS, or TCP Connection Failure",
+          "category": "NETWORK_DNS_FAILURE",
+          "matched": true,
+          "duration_ms": 1.0972,
+          "finding_id": "RULE_K8S_NETWORK_DNS_FAILURE",
+          "finding_title": "Kubernetes Service Has No Active Endpoints",
+          "severity": "HIGH",
+          "confidence": 0.95,
+          "subtype": "SERVICE_NO_ENDPOINTS",
+          "primary_indicator": "Endpoints: <none>",
+          "evidence_count": 2,
+          "evidence_line_ranges": [
+            {
+              "start_line": 2,
+              "end_line": 4,
+              "reason": "Network/Service error detected: 'Endpoints: <none>'"
+            },
+            {
+              "start_line": 3,
+              "end_line": 5,
+              "reason": "Network/Service error detected: 'no endpoints available for service \"inventory-svc\"'"
+            }
+          ]
+        },
+        {
+          "rule_id": "RULE_K8S_IMAGE_PULL_FAILURE",
+          "rule_class": "ImagePullRule",
+          "rule_title": "Container Image Pull Failure (ImagePullBackOff / ErrImagePull)",
+          "category": "IMAGE_PULL_FAILURE",
+          "matched": false,
+          "duration_ms": 0.4882,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_STORAGE_PVC_FAILURE",
+          "rule_class": "StorageRule",
+          "rule_title": "Persistent Volume / Storage Mount Failure (FailedMount / Multi-Attach)",
+          "category": "STORAGE_PVC_FAILURE",
+          "matched": false,
+          "duration_ms": 0.2848,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_SCHEDULING_FAILURE",
+          "rule_class": "SchedulingRule",
+          "rule_title": "Pod Scheduling Failure / Node Resource Pressure / CPU Throttling",
+          "category": "SCHEDULING_NODE_FAILURE",
+          "matched": false,
+          "duration_ms": 0.776,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_RBAC_FAILURE",
+          "rule_class": "RBACRule",
+          "rule_title": "Kubernetes RBAC Authorization / Permission Denied (403 Forbidden)",
+          "category": "RBAC_AUTH_FAILURE",
+          "matched": false,
+          "duration_ms": 0.2857,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_APPLICATION_PANIC_EXCEPTION",
+          "rule_class": "ApplicationPanicRule",
+          "rule_title": "Application Fatal Exception or Runtime Panic",
+          "category": "APPLICATION_PANIC",
+          "matched": false,
+          "duration_ms": 0.2197,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        }
+      ]
+    },
+    {
+      "step_index": 7,
+      "step_type": "causal_root_cause_resolution",
+      "component": "InvestigationEngine._determine_root_cause",
+      "status": "SUCCESS",
+      "duration_ms": 0.0504,
+      "output_summary": {
+        "category": "NETWORK_DNS_FAILURE",
+        "subtype": "SERVICE_NO_ENDPOINTS",
+        "severity": "HIGH",
+        "confidence": 0.96,
+        "primary_finding_id": "RULE_K8S_NETWORK_DNS_FAILURE",
+        "summary": "Kubernetes Service Has No Active Endpoints",
+        "causal_chain": [
+          "Kubernetes Service selector evaluated pod labels in target namespace",
+          "Zero running/ready pods matched the Service label selector (or targetPort mismatch)",
+          "EndpointSlice controller published empty endpoint set (Endpoints: <none>)",
+          "kube-proxy / ingress rejected traffic with 'no endpoints available for service' (HTTP 503)"
+        ]
+      }
+    },
+    {
+      "step_index": 8,
+      "step_type": "blast_radius_computation",
+      "component": "InvestigationEngine._compute_blast_radius",
+      "status": "SUCCESS",
+      "duration_ms": 0.0371,
+      "output_summary": {
+        "pods_affected": [
+          "inventory-service-5c6d7e8f9-t2w4y"
+        ],
+        "containers_affected": [
+          "inventory-api"
+        ],
+        "namespaces_affected": [
+          "fulfillment"
+        ],
+        "nodes_affected": [
+          "node-general-05"
+        ],
+        "services_affected": [],
+        "estimated_service_impact": "Single Pod Affected"
+      }
+    },
+    {
+      "step_index": 9,
+      "step_type": "remediation_generation",
+      "component": "InvestigationEngine._generate_remediations",
+      "status": "SUCCESS",
+      "duration_ms": 0.0347,
+      "output_summary": {
+        "remediation_count": 2,
+        "kubectl_commands": [
+          "kubectl get svc,endpoints,endpointslice -o wide && kubectl get pods --show-labels",
+          "kubectl patch svc <service-name> -p '{\"spec\":{\"selector\":{\"app\":\"<app-label>\"}}}'"
+        ]
+      }
+    }
+  ],
+  "agent_output": {
+    "overall_status": "HIGH_SEVERITY_INCIDENT",
+    "root_cause": {
+      "category": "NETWORK_DNS_FAILURE",
+      "summary": "Kubernetes Service Has No Active Endpoints",
+      "confidence": 0.96,
+      "severity": "HIGH",
+      "causal_chain": [
+        "Kubernetes Service selector evaluated pod labels in target namespace",
+        "Zero running/ready pods matched the Service label selector (or targetPort mismatch)",
+        "EndpointSlice controller published empty endpoint set (Endpoints: <none>)",
+        "kube-proxy / ingress rejected traffic with 'no endpoints available for service' (HTTP 503)"
+      ],
+      "contributing_factors": [
+        "Label selector mismatch between Service spec.selector and Deployment template.metadata.labels",
+        "All backing pods failed readiness checks or scaled to zero",
+        "Deployment 'inventory-service' is on revision #1 with image 'registry.internal/fulfillment/inventory-api:v1.0.0' (no recent version change)."
+      ],
+      "primary_finding_id": "RULE_K8S_NETWORK_DNS_FAILURE"
+    },
+    "blast_radius": {
+      "pods_affected": [
+        "inventory-service-5c6d7e8f9-t2w4y"
+      ],
+      "containers_affected": [
+        "inventory-api"
+      ],
+      "namespaces_affected": [
+        "fulfillment"
+      ],
+      "nodes_affected": [
+        "node-general-05"
+      ],
+      "services_affected": [],
+      "estimated_service_impact": "Single Pod Affected"
+    },
+    "findings": [
+      {
+        "id": "RULE_K8S_NETWORK_DNS_FAILURE",
+        "category": "NETWORK_DNS_FAILURE",
+        "title": "Kubernetes Service Has No Active Endpoints",
+        "severity": "HIGH",
+        "description": "A Kubernetes Service has zero ready backing pod endpoints [SERVICE_NO_ENDPOINTS]. Targeted endpoints/services: inventory-svc. This typically occurs when Service label selectors do not match pod labels, or all backing pods are failing readiness checks.",
+        "confidence": 0.95,
+        "primary_indicator": "Endpoints: <none>",
+        "evidence": [
+          {
+            "start_line": 2,
+            "end_line": 4,
+            "raw_lines": [
+              "[L2] 2026-10-14T16:10:05.300Z WARN pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 endpointslice-controller: Service fulfillment/inventory-svc selector (app=inventory-backend,tier=api) matched 0 pods; selector mismatch detected against deployment inventory-service",
+              "[L3] 2026-10-14T16:10:05.315Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 endpointslice-controller: Service inventory-svc has 0 active endpoints (Endpoints: <none>)",
+              "[L4] 2026-10-14T16:10:12.780Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 ingress-nginx: connect() failed: no endpoints available for service \"inventory-svc\" while routing GET /api/v1/stock -> HTTP 503 Service Temporarily Unavailable"
+            ],
+            "timestamp": "2026-10-14T16:10:05.315000Z",
+            "highlighted_reason": "Network/Service error detected: 'Endpoints: <none>'",
+            "extracted_params": {
+              "network_subsystem": "SERVICE_NO_ENDPOINTS"
+            }
+          },
+          {
+            "start_line": 3,
+            "end_line": 5,
+            "raw_lines": [
+              "[L3] 2026-10-14T16:10:05.315Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 endpointslice-controller: Service inventory-svc has 0 active endpoints (Endpoints: <none>)",
+              "[L4] 2026-10-14T16:10:12.780Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 ingress-nginx: connect() failed: no endpoints available for service \"inventory-svc\" while routing GET /api/v1/stock -> HTTP 503 Service Temporarily Unavailable",
+              "[L5] 2026-10-14T16:10:18.920Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 kube-proxy: rejecting packet for service fulfillment/inventory-svc:80: service has no active endpoints"
+            ],
+            "timestamp": "2026-10-14T16:10:12.780000Z",
+            "highlighted_reason": "Network/Service error detected: 'no endpoints available for service \"inventory-svc\"'",
+            "extracted_params": {
+              "network_subsystem": "SERVICE_NO_ENDPOINTS",
+              "endpoint": "inventory-svc"
+            }
+          }
+        ],
+        "impacted_resources": [
+          "inventory-service-5c6d7e8f9-t2w4y"
+        ],
+        "suggested_remediation": [
+          "Inspect Service endpoints and selector labels: `kubectl describe svc <service-name>` and `kubectl get endpoints <service-name>`.",
+          "Compare Service selector labels against pod labels: `kubectl get pods --show-labels`."
+        ],
+        "metadata": {
+          "network_subsystem": "SERVICE_NO_ENDPOINTS",
+          "subtypes": [
+            "SERVICE_NO_ENDPOINTS"
+          ]
+        }
+      }
+    ],
+    "timeline": [
+      {
+        "timestamp": "2026-10-14T16:10:05.315000Z",
+        "relative_time_str": "2026-10-14 16:10:05",
+        "line_number": 3,
+        "event_type": "ERROR",
+        "severity": "HIGH",
+        "summary": "2026-10-14T16:10:05.315Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment",
+        "details": "2026-10-14T16:10:05.315Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 endpointslice-controller: Service inventory-svc has 0 active endpoints (Endpoints: <none>)",
+        "resource": "inventory-service-5c6d7e8f9-t2w4y"
+      },
+      {
+        "timestamp": "2026-10-14T16:10:12.780000Z",
+        "relative_time_str": "2026-10-14 16:10:12",
+        "line_number": 4,
+        "event_type": "ERROR",
+        "severity": "HIGH",
+        "summary": "2026-10-14T16:10:12.780Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment",
+        "details": "2026-10-14T16:10:12.780Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 ingress-nginx: connect() failed: no endpoints available for service \"inventory-svc\" while routing GET /api/v1/stock -> HTTP 503 Service Temporarily Unavailable",
+        "resource": "inventory-service-5c6d7e8f9-t2w4y"
+      },
+      {
+        "timestamp": "2026-10-14T16:10:18.920000Z",
+        "relative_time_str": "2026-10-14 16:10:18",
+        "line_number": 5,
+        "event_type": "ERROR",
+        "severity": "HIGH",
+        "summary": "2026-10-14T16:10:18.920Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment",
+        "details": "2026-10-14T16:10:18.920Z ERROR pod=inventory-service-5c6d7e8f9-t2w4y namespace=fulfillment container=inventory-api node=node-general-05 kube-proxy: rejecting packet for service fulfillment/inventory-svc:80: service has no active endpoints",
+        "resource": "inventory-service-5c6d7e8f9-t2w4y"
+      }
+    ],
+    "remediations": [
+      {
+        "action_type": "immediate_mitigation",
+        "description": "Compare Service label selector against pod labels and inspect Endpoints.",
+        "kubectl_command": "kubectl get svc,endpoints,endpointslice -o wide && kubectl get pods --show-labels",
+        "yaml_patch": null,
+        "explanation": "Identifies selector mismatches or unready pods causing the Service to have 0 endpoints."
+      },
+      {
+        "action_type": "permanent_fix",
+        "description": "Patch Service selector to match the Deployment pod template labels.",
+        "kubectl_command": "kubectl patch svc <service-name> -p '{\"spec\":{\"selector\":{\"app\":\"<app-label>\"}}}'",
+        "yaml_patch": null,
+        "explanation": "Aligns the Service label selector with running pods so EndpointSlices populate immediately."
+      }
+    ]
+  },
+  "evaluation": {
+    "passed": true,
+    "score": 1.0,
+    "checks": {
+      "root_cause_category": {
+        "expected": "NETWORK_DNS_FAILURE",
+        "actual": "NETWORK_DNS_FAILURE",
+        "matched": true
+      },
+      "subtype": {
+        "expected": "SERVICE_NO_ENDPOINTS",
+        "actual": "SERVICE_NO_ENDPOINTS",
+        "matched": true
+      },
+      "severity": {
+        "expected": "HIGH",
+        "actual": "HIGH",
+        "matched": true
+      },
+      "blast_radius": {
+        "expected_pods": [
+          "inventory-service-5c6d7e8f9-t2w4y"
+        ],
+        "actual_pods": [
+          "inventory-service-5c6d7e8f9-t2w4y"
+        ],
+        "expected_namespace": "fulfillment",
+        "actual_namespaces": [
+          "fulfillment"
+        ],
+        "expected_container": "inventory-api",
+        "actual_containers": [
+          "inventory-api"
+        ],
+        "matched": true
+      },
+      "evidence_keywords": {
+        "expected": [
+          "no endpoints available for service",
+          "Endpoints: <none>",
+          "0 active endpoints",
+          "selector mismatch"
+        ],
+        "matched_keywords": [
+          "no endpoints available for service",
+          "Endpoints: <none>",
+          "0 active endpoints",
+          "selector mismatch"
+        ],
+        "matched": true
+      },
+      "remediation_commands": {
+        "expected": [
+          "kubectl get svc,endpoints,endpointslice -o wide && kubectl get pods --show-labels",
+          "kubectl patch svc <service-name> -p '{\"spec\":{\"selector\":{\"app\":\"<app-label>\"}}}'"
+        ],
+        "matched_commands": [
+          "kubectl get svc,endpoints,endpointslice -o wide && kubectl get pods --show-labels",
+          "kubectl patch svc <service-name> -p '{\"spec\":{\"selector\":{\"app\":\"<app-label>\"}}}'"
+        ],
+        "all_generated_commands": [
+          "kubectl get svc,endpoints,endpointslice -o wide && kubectl get pods --show-labels",
+          "kubectl patch svc <service-name> -p '{\"spec\":{\"selector\":{\"app\":\"<app-label>\"}}}'"
+        ],
+        "matched": true
+      }
+    }
+  }
+}

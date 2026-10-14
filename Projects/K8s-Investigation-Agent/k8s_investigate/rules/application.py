@@ -90,6 +90,7 @@ class ApplicationPanicRule(DiagnosticRule):
             category=self.category,
             title=f"Application Crash: {types_str}",
             severity=Severity.HIGH,
+            description=description,
             confidence=0.90,
             primary_indicator=reasons[0][:100] if reasons else "Application Crash",
             evidence=evidence_snippets,

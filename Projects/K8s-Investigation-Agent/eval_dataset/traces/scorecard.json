@@ -1,0 +1,798 @@
+{
+  "benchmark_name": "K8s-Investigation-Agent Incident Evaluation Benchmark",
+  "version": "1.0.0",
+  "graded_at": "2026-10-14T23:44:26.379814+00:00",
+  "overall_summary": {
+    "total_cases": 10,
+    "passed_cases": 10,
+    "failed_cases": 0,
+    "pass_rate_pct": 100.0,
+    "total_points_earned": 1000.0,
+    "total_points_possible": 1000.0,
+    "overall_score_pct": 100.0,
+    "overall_grade": "A+",
+    "avg_latency_ms": 9.27
+  },
+  "rubric_weights": {
+    "D1_tool_trajectory": 15.0,
+    "D2_root_cause_accuracy": 25.0,
+    "D3_severity_calibration": 10.0,
+    "D4_evidence_grounding": 20.0,
+    "D5_blast_radius": 15.0,
+    "D6_remediation_quality": 15.0
+  },
+  "dimension_summary": {
+    "D1_tool_trajectory": {
+      "average_score": 15.0,
+      "max_score": 15.0,
+      "percentage": 100.0
+    },
+    "D2_root_cause_accuracy": {
+      "average_score": 25.0,
+      "max_score": 25.0,
+      "percentage": 100.0
+    },
+    "D3_severity_calibration": {
+      "average_score": 10.0,
+      "max_score": 10.0,
+      "percentage": 100.0
+    },
+    "D4_evidence_grounding": {
+      "average_score": 20.0,
+      "max_score": 20.0,
+      "percentage": 100.0
+    },
+    "D5_blast_radius": {
+      "average_score": 15.0,
+      "max_score": 15.0,
+      "percentage": 100.0
+    },
+    "D6_remediation_quality": {
+      "average_score": 15.0,
+      "max_score": 15.0,
+      "percentage": 100.0
+    }
+  },
+  "case_scorecards": [
+    {
+      "test_case_id": "TC-01",
+      "slug": "oom_kill",
+      "name": "OOM Kill (Container Memory Limit Exceeded)",
+      "trace_id": "trace-tc-01-oom_kill",
+      "investigation_id": "k8s-inv-d817852a",
+      "duration_ms": 16.3689,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "9/9"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "OOM_KILL",
+          "actual_category": "OOM_KILL",
+          "expected_subtype": null,
+          "actual_subtype": null,
+          "matched_rules": [
+            "RULE_K8S_OOM_KILL",
+            "RULE_K8S_CRASHLOOP_BACKOFF"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "CRITICAL",
+          "actual_severity": "CRITICAL",
+          "confidence": 0.98
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "4/4",
+          "matched_keywords": [
+            "OOMKilled",
+            "Memory cgroup out of memory: Killed process",
+            "exit code 137",
+            "CrashLoopBackOff"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 4
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "node-gpu-pool-02"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "2/2",
+          "remediation_actions_count": 2
+        }
+      }
+    },
+    {
+      "test_case_id": "TC-02",
+      "slug": "cpu_throttling",
+      "name": "CPU Throttling (CFS Quota Exhaustion)",
+      "trace_id": "trace-tc-02-cpu_throttling",
+      "investigation_id": "k8s-inv-6b2cf1f8",
+      "duration_ms": 8.3592,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "6/6"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "SCHEDULING_NODE_FAILURE",
+          "actual_category": "SCHEDULING_NODE_FAILURE",
+          "expected_subtype": "CPU_THROTTLING",
+          "actual_subtype": "CPU_THROTTLING",
+          "matched_rules": [
+            "RULE_K8S_SCHEDULING_FAILURE"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "HIGH",
+          "actual_severity": "HIGH",
+          "confidence": 0.94
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "4/4",
+          "matched_keywords": [
+            "CPU throttling detected",
+            "nr_throttled=412",
+            "throttled_time=",
+            "CFS quota exceeded"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 3
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "node-general-04"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "2/2",
+          "remediation_actions_count": 2
+        }
+      }
+    },
+    {
+      "test_case_id": "TC-03",
+      "slug": "container_crash",
+      "name": "Container Crash (Unhandled Runtime Panic / SIGSEGV)",
+      "trace_id": "trace-tc-03-container_crash",
+      "investigation_id": "k8s-inv-a3c3fb97",
+      "duration_ms": 10.464,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "8/8"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "APPLICATION_PANIC",
+          "actual_category": "APPLICATION_PANIC",
+          "expected_subtype": null,
+          "actual_subtype": null,
+          "matched_rules": [
+            "RULE_K8S_CRASHLOOP_BACKOFF",
+            "RULE_APPLICATION_PANIC_EXCEPTION"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "HIGH",
+          "actual_severity": "HIGH",
+          "confidence": 0.9
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "4/4",
+          "matched_keywords": [
+            "panic: runtime error: invalid memory address or nil pointer dereference",
+            "SIGSEGV",
+            "goroutine",
+            "exit code 2"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 1
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "node-general-01"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "2/2",
+          "remediation_actions_count": 2
+        }
+      }
+    },
+    {
+      "test_case_id": "TC-04",
+      "slug": "crash_loop_backoff",
+      "name": "CrashLoopBackOff (Missing Secret / Startup Configuration Failure)",
+      "trace_id": "trace-tc-04-crash_loop_backoff",
+      "investigation_id": "k8s-inv-62927b0f",
+      "duration_ms": 13.0175,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "9/9"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "CRASH_LOOP",
+          "actual_category": "CRASH_LOOP",
+          "expected_subtype": null,
+          "actual_subtype": null,
+          "matched_rules": [
+            "RULE_K8S_CRASHLOOP_BACKOFF"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "CRITICAL",
+          "actual_severity": "CRITICAL",
+          "confidence": 0.95
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "4/4",
+          "matched_keywords": [
+            "CrashLoopBackOff",
+            "Back-off restarting failed container",
+            "exit code 1",
+            "/etc/secrets/jwt/private.pem"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 1
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "node-general-03"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "2/2",
+          "remediation_actions_count": 2
+        }
+      }
+    },
+    {
+      "test_case_id": "TC-05",
+      "slug": "node_memory_pressure",
+      "name": "Node Memory Pressure & Kubelet Pod Eviction",
+      "trace_id": "trace-tc-05-node_memory_pressure",
+      "investigation_id": "k8s-inv-0b46dc53",
+      "duration_ms": 7.9899,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "6/6"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "SCHEDULING_NODE_FAILURE",
+          "actual_category": "SCHEDULING_NODE_FAILURE",
+          "expected_subtype": "NODE_MEMORY_PRESSURE",
+          "actual_subtype": "NODE_MEMORY_PRESSURE",
+          "matched_rules": [
+            "RULE_K8S_SCHEDULING_FAILURE"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "CRITICAL",
+          "actual_severity": "CRITICAL",
+          "confidence": 0.96
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "4/4",
+          "matched_keywords": [
+            "MemoryPressure",
+            "The node was low on resource: memory",
+            "Evicted",
+            "NodeHasInsufficientMemory"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 3
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "node-worker-07"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "2/2",
+          "remediation_actions_count": 2
+        }
+      }
+    },
+    {
+      "test_case_id": "TC-06",
+      "slug": "node_not_ready",
+      "name": "Node Not Ready (PLEG Unhealthy & Container Runtime Hang)",
+      "trace_id": "trace-tc-06-node_not_ready",
+      "investigation_id": "k8s-inv-d69d5386",
+      "duration_ms": 7.024,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "6/6"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "SCHEDULING_NODE_FAILURE",
+          "actual_category": "SCHEDULING_NODE_FAILURE",
+          "expected_subtype": "NODE_NOT_READY",
+          "actual_subtype": "NODE_NOT_READY",
+          "matched_rules": [
+            "RULE_K8S_SCHEDULING_FAILURE"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "CRITICAL",
+          "actual_severity": "CRITICAL",
+          "confidence": 0.97
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "4/4",
+          "matched_keywords": [
+            "NodeNotReady",
+            "PLEG is not healthy",
+            "threshold is 3m0s",
+            "container runtime status check"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 3
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "node-worker-11"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "2/2",
+          "remediation_actions_count": 2
+        }
+      }
+    },
+    {
+      "test_case_id": "TC-07",
+      "slug": "readiness_probe_incorrect",
+      "name": "Readiness Probe Misconfigured (Wrong HTTP Path / Port)",
+      "trace_id": "trace-tc-07-readiness_probe_incorrect",
+      "investigation_id": "k8s-inv-9a2a1d30",
+      "duration_ms": 7.7241,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "6/6"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "PROBE_FAILURE",
+          "actual_category": "PROBE_FAILURE",
+          "expected_subtype": null,
+          "actual_subtype": null,
+          "matched_rules": [
+            "RULE_K8S_PROBE_FAILURE"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "HIGH",
+          "actual_severity": "HIGH",
+          "confidence": 0.95
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "3/3",
+          "matched_keywords": [
+            "Readiness probe failed",
+            "HTTP probe failed with statuscode: 404",
+            "/healthz"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 1
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "node-general-02"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "1/1",
+          "remediation_actions_count": 2
+        }
+      }
+    },
+    {
+      "test_case_id": "TC-08",
+      "slug": "resource_request_limits",
+      "name": "Resource Request Limits (Unschedulable Pod / Insufficient CPU & Memory)",
+      "trace_id": "trace-tc-08-resource_request_limits",
+      "investigation_id": "k8s-inv-304b5033",
+      "duration_ms": 7.2114,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "4/4"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "SCHEDULING_NODE_FAILURE",
+          "actual_category": "SCHEDULING_NODE_FAILURE",
+          "expected_subtype": "INSUFFICIENT_CPU",
+          "actual_subtype": "INSUFFICIENT_CPU",
+          "matched_rules": [
+            "RULE_K8S_SCHEDULING_FAILURE"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "HIGH",
+          "actual_severity": "HIGH",
+          "confidence": 0.96
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "4/4",
+          "matched_keywords": [
+            "FailedScheduling",
+            "0/6 nodes are available",
+            "Insufficient cpu",
+            "Insufficient memory"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 4
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "cluster-scheduler"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "2/2",
+          "remediation_actions_count": 2
+        }
+      }
+    },
+    {
+      "test_case_id": "TC-09",
+      "slug": "service_no_endpoints",
+      "name": "Service Has No Endpoints (Label Selector Mismatch)",
+      "trace_id": "trace-tc-09-service_no_endpoints",
+      "investigation_id": "k8s-inv-9e9ea280",
+      "duration_ms": 7.0872,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "5/5"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "NETWORK_DNS_FAILURE",
+          "actual_category": "NETWORK_DNS_FAILURE",
+          "expected_subtype": "SERVICE_NO_ENDPOINTS",
+          "actual_subtype": "SERVICE_NO_ENDPOINTS",
+          "matched_rules": [
+            "RULE_K8S_NETWORK_DNS_FAILURE"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "HIGH",
+          "actual_severity": "HIGH",
+          "confidence": 0.96
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "4/4",
+          "matched_keywords": [
+            "no endpoints available for service",
+            "Endpoints: <none>",
+            "0 active endpoints",
+            "selector mismatch"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 4
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "node-general-05"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "2/2",
+          "remediation_actions_count": 2
+        }
+      }
+    },
+    {
+      "test_case_id": "TC-10",
+      "slug": "service_routes_unhealthy_pods",
+      "name": "Service Routes Traffic to Unhealthy Pods (publishNotReadyAddresses Enabled)",
+      "trace_id": "trace-tc-10-service_routes_unhealthy_pods",
+      "investigation_id": "k8s-inv-b12e1fb0",
+      "duration_ms": 7.4629,
+      "total_points": 100.0,
+      "max_points": 100.0,
+      "percentage": 100.0,
+      "grade": "A+",
+      "verdict": "PASS",
+      "dimensions": {
+        "D1_tool_trajectory": {
+          "score": 15.0,
+          "max": 15.0,
+          "target_extracted": true,
+          "tools_invoked": [
+            "get_pod_logs",
+            "get_pod_events",
+            "get_deployment_history"
+          ],
+          "steps_completed": "9/9",
+          "entries_parsed": "5/5"
+        },
+        "D2_root_cause_accuracy": {
+          "score": 25.0,
+          "max": 25.0,
+          "expected_category": "NETWORK_DNS_FAILURE",
+          "actual_category": "NETWORK_DNS_FAILURE",
+          "expected_subtype": "SERVICE_ROUTES_UNHEALTHY_PODS",
+          "actual_subtype": "SERVICE_ROUTES_UNHEALTHY_PODS",
+          "matched_rules": [
+            "RULE_K8S_NETWORK_DNS_FAILURE"
+          ],
+          "causal_priority_ok": true
+        },
+        "D3_severity_calibration": {
+          "score": 10.0,
+          "max": 10.0,
+          "expected_severity": "HIGH",
+          "actual_severity": "HIGH",
+          "confidence": 0.95
+        },
+        "D4_evidence_grounding": {
+          "score": 20.0,
+          "max": 20.0,
+          "keywords_matched": "3/3",
+          "matched_keywords": [
+            "publishNotReadyAddresses: true",
+            "routing live traffic to unready pod",
+            "unready endpoint"
+          ],
+          "has_line_evidence": true,
+          "causal_chain_steps": 4
+        },
+        "D5_blast_radius": {
+          "score": 15.0,
+          "max": 15.0,
+          "pod_match": true,
+          "namespace_match": true,
+          "container_match": true,
+          "node_match": true,
+          "identified_node": "node-general-06"
+        },
+        "D6_remediation_quality": {
+          "score": 15.0,
+          "max": 15.0,
+          "commands_matched": "2/2",
+          "remediation_actions_count": 2
+        }
+      }
+    }
+  ]
+}

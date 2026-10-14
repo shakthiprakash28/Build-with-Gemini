@@ -1,0 +1,565 @@
+{
+  "trace_id": "trace-tc-02-cpu_throttling",
+  "sequence_number": 2,
+  "test_case": {
+    "id": "TC-02",
+    "slug": "cpu_throttling",
+    "name": "CPU Throttling (CFS Quota Exhaustion)",
+    "log_file": "logs/tc02_cpu_throttling.log",
+    "scenario_description": "A latency-sensitive pricing API ('pricing-api') in pod 'pricing-calculator-7c9d4b5f8-m2k9l' (namespace 'commerce') runs 8 OS worker threads with a restrictive CPU limit of 200m (cfs_quota_us=20000 per 100000us period). During promotional traffic bursts, the Linux CFS bandwidth controller throttles the container across 86.4% of scheduling periods, spiking p99 response times to 2.45s without killing the container.",
+    "injected_fault": "Restrictive resources.limits.cpu: 200m on multi-threaded Go service (GOMAXPROCS=8) causing severe Linux CFS bandwidth throttling.",
+    "ground_truth_rca": "Container 'pricing-api' in pod 'pricing-calculator-7c9d4b5f8-m2k9l' is experiencing severe Linux CFS CPU bandwidth throttling (nr_throttled=412, throttled_time=38.42s, 86.4% periods throttled) because its 8 concurrent worker threads rapidly exhaust the 200m CPU quota within each 100ms period."
+  },
+  "agent_input": {
+    "prompt": "Investigate the Kubernetes incident for pod pricing-calculator-7c9d4b5f8-m2k9l in namespace commerce",
+    "extracted_pod": "pricing-calculator-7c9d4b5f8-m2k9l",
+    "extracted_namespace": "commerce",
+    "container": "pricing-api"
+  },
+  "execution_metrics": {
+    "investigation_id": "k8s-inv-6b2cf1f8",
+    "started_at": "2026-10-14T23:42:02.417696+00:00",
+    "completed_at": "2026-10-14T23:42:02.426047+00:00",
+    "total_duration_ms": 8.3592,
+    "engine_duration_ms": 6.2829,
+    "phase_timings_ms": {
+      "rule_evaluation_ms": 6.1096,
+      "timeline_construction_ms": 0.0617,
+      "root_cause_resolution_ms": 0.0334,
+      "blast_radius_computation_ms": 0.0273,
+      "remediation_generation_ms": 0.0246,
+      "total_engine_ms": 6.2829
+    },
+    "total_steps": 9,
+    "tools_invoked_count": 3,
+    "tools_invoked": [
+      "get_pod_logs",
+      "get_pod_events",
+      "get_deployment_history"
+    ],
+    "total_log_lines": 6,
+    "parsed_entries": 6,
+    "rules_evaluated": 9,
+    "rules_matched": 1,
+    "matched_rule_ids": [
+      "RULE_K8S_SCHEDULING_FAILURE"
+    ]
+  },
+  "trace_steps": [
+    {
+      "step_index": 1,
+      "step_type": "target_extraction",
+      "component": "KubernetesInvestigationAgent._extract_pod_target",
+      "status": "SUCCESS",
+      "duration_ms": 0.0949,
+      "input": {
+        "prompt": "Investigate the Kubernetes incident for pod pricing-calculator-7c9d4b5f8-m2k9l in namespace commerce",
+        "default_namespace": null
+      },
+      "output": {
+        "pod_name": "pricing-calculator-7c9d4b5f8-m2k9l",
+        "namespace": "commerce"
+      }
+    },
+    {
+      "step_index": 2,
+      "step_type": "tool_call",
+      "tool_name": "get_pod_logs",
+      "status": "SUCCESS",
+      "duration_ms": 0.007,
+      "arguments": {
+        "pod_name": "pricing-calculator-7c9d4b5f8-m2k9l",
+        "namespace": "commerce",
+        "container": "pricing-api",
+        "previous": false,
+        "tail_lines": null
+      },
+      "output_summary": {
+        "line_count": 6,
+        "char_count": 1425,
+        "preview_lines": [
+          "2026-10-14T09:14:02.015Z INFO pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 Starting pricing-api v1.18.0 with GOMAXPROCS=8 (resources.requests.cpu=100m, resources.limits.cpu=200m)",
+          "2026-10-14T09:14:15.220Z INFO pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 Incoming flash-sale traffic burst: 420 req/sec on /api/v2/calculate-quote",
+          "2026-10-14T09:14:22.480Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cadvisor: CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000)",
+          "2026-10-14T09:14:25.105Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cgroup/cpu.stat: nr_periods=477 nr_throttled=412 throttled_time=38420000000",
+          "2026-10-14T09:14:28.912Z ERROR pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 kubelet: CFS quota exceeded for container pricing-api: runnable threads stalled for 820ms waiting for next CFS bandwidth period"
+        ]
+      }
+    },
+    {
+      "step_index": 3,
+      "step_type": "tool_call",
+      "tool_name": "get_pod_events",
+      "status": "SUCCESS",
+      "duration_ms": 0.003,
+      "arguments": {
+        "pod_name": "pricing-calculator-7c9d4b5f8-m2k9l",
+        "namespace": "commerce"
+      },
+      "output_summary": {
+        "line_count": 1,
+        "char_count": 259,
+        "preview_lines": [
+          "2026-10-14T09:14:28.912Z ERROR pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 kubelet: CFS quota exceeded for container pricing-api: runnable threads stalled for 820ms waiting for next CFS bandwidth period"
+        ]
+      }
+    },
+    {
+      "step_index": 4,
+      "step_type": "tool_call",
+      "tool_name": "get_deployment_history",
+      "status": "SUCCESS",
+      "duration_ms": 0.0035,
+      "arguments": {
+        "deployment_name": "pricing-calculator-7c9d4b5f8-m2k9l",
+        "namespace": "commerce",
+        "pod_name": "pricing-calculator-7c9d4b5f8-m2k9l"
+      },
+      "output_summary": {
+        "line_count": 8,
+        "char_count": 286,
+        "preview_lines": [
+          "deployment.apps/pricing-calculator",
+          "REVISION  CHANGE-CAUSE",
+          "1         kubectl apply --filename=pricing-calculator-deployment.yaml",
+          "deployment.apps/pricing-calculator with revision #1",
+          "Pod Template:"
+        ]
+      }
+    },
+    {
+      "step_index": 5,
+      "step_type": "log_parsing",
+      "component": "LogParser.parse_text",
+      "status": "SUCCESS",
+      "duration_ms": 1.76,
+      "output_summary": {
+        "total_raw_lines": 6,
+        "parsed_entries_count": 6,
+        "level_distribution": {
+          "INFO": 2,
+          "WARN": 3,
+          "ERROR": 1
+        },
+        "detected_components": [],
+        "stack_trace_entries": 0
+      }
+    },
+    {
+      "step_index": 6,
+      "step_type": "diagnostic_rule_evaluation",
+      "component": "InvestigationEngine.rules",
+      "status": "SUCCESS",
+      "duration_ms": 6.1096,
+      "rules_evaluated_count": 9,
+      "rules_matched_count": 1,
+      "matched_rule_ids": [
+        "RULE_K8S_SCHEDULING_FAILURE"
+      ],
+      "rule_evaluations": [
+        {
+          "rule_id": "RULE_K8S_OOM_KILL",
+          "rule_class": "OOMKillRule",
+          "rule_title": "Container Terminated Due To Out-Of-Memory (OOMKilled / Exit 137)",
+          "category": "OOM_KILL",
+          "matched": false,
+          "duration_ms": 1.1216,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_CRASHLOOP_BACKOFF",
+          "rule_class": "CrashLoopRule",
+          "rule_title": "Pod In CrashLoopBackOff / Repeated Process Failure",
+          "category": "CRASH_LOOP",
+          "matched": false,
+          "duration_ms": 0.7104,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_PROBE_FAILURE",
+          "rule_class": "ProbeFailureRule",
+          "rule_title": "Kubernetes Health Check (Liveness/Readiness/Startup) Probe Failed",
+          "category": "PROBE_FAILURE",
+          "matched": false,
+          "duration_ms": 0.3243,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_NETWORK_DNS_FAILURE",
+          "rule_class": "NetworkFailureRule",
+          "rule_title": "Network, Service Endpoint, DNS, or TCP Connection Failure",
+          "category": "NETWORK_DNS_FAILURE",
+          "matched": false,
+          "duration_ms": 1.4211,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_IMAGE_PULL_FAILURE",
+          "rule_class": "ImagePullRule",
+          "rule_title": "Container Image Pull Failure (ImagePullBackOff / ErrImagePull)",
+          "category": "IMAGE_PULL_FAILURE",
+          "matched": false,
+          "duration_ms": 0.6156,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_STORAGE_PVC_FAILURE",
+          "rule_class": "StorageRule",
+          "rule_title": "Persistent Volume / Storage Mount Failure (FailedMount / Multi-Attach)",
+          "category": "STORAGE_PVC_FAILURE",
+          "matched": false,
+          "duration_ms": 0.3609,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_K8S_SCHEDULING_FAILURE",
+          "rule_class": "SchedulingRule",
+          "rule_title": "Pod Scheduling Failure / Node Resource Pressure / CPU Throttling",
+          "category": "SCHEDULING_NODE_FAILURE",
+          "matched": true,
+          "duration_ms": 0.9369,
+          "finding_id": "RULE_K8S_SCHEDULING_FAILURE",
+          "finding_title": "Container CFS CPU Quota Throttling Detected",
+          "severity": "HIGH",
+          "confidence": 0.97,
+          "subtype": "CPU_THROTTLING",
+          "primary_indicator": "CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000) 2026-10-14T09:14:22.480Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cadvisor: CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000)",
+          "evidence_count": 2,
+          "evidence_line_ranges": [
+            {
+              "start_line": 2,
+              "end_line": 4,
+              "reason": "Resource/Node constraint detected: 'CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000) 2026-10-14T09:14:22.480Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cadvisor: CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000)'"
+            },
+            {
+              "start_line": 3,
+              "end_line": 5,
+              "reason": "Resource/Node constraint detected: 'nr_throttled=412 throttled_time=38420000000 2026-10-14T09:14:25.105Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cgroup/cpu.stat: nr_periods=477 nr_throttled=412 throttled_time=38420000000'"
+            }
+          ]
+        },
+        {
+          "rule_id": "RULE_K8S_RBAC_FAILURE",
+          "rule_class": "RBACRule",
+          "rule_title": "Kubernetes RBAC Authorization / Permission Denied (403 Forbidden)",
+          "category": "RBAC_AUTH_FAILURE",
+          "matched": false,
+          "duration_ms": 0.3208,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        },
+        {
+          "rule_id": "RULE_APPLICATION_PANIC_EXCEPTION",
+          "rule_class": "ApplicationPanicRule",
+          "rule_title": "Application Fatal Exception or Runtime Panic",
+          "category": "APPLICATION_PANIC",
+          "matched": false,
+          "duration_ms": 0.2261,
+          "finding_id": null,
+          "finding_title": null,
+          "severity": null,
+          "confidence": null,
+          "subtype": null,
+          "primary_indicator": null,
+          "evidence_count": 0,
+          "evidence_line_ranges": []
+        }
+      ]
+    },
+    {
+      "step_index": 7,
+      "step_type": "causal_root_cause_resolution",
+      "component": "InvestigationEngine._determine_root_cause",
+      "status": "SUCCESS",
+      "duration_ms": 0.0334,
+      "output_summary": {
+        "category": "SCHEDULING_NODE_FAILURE",
+        "subtype": "CPU_THROTTLING",
+        "severity": "HIGH",
+        "confidence": 0.94,
+        "primary_finding_id": "RULE_K8S_SCHEDULING_FAILURE",
+        "summary": "Container CFS CPU Quota Throttling Detected",
+        "causal_chain": [
+          "Container CPU usage exceeded configured CFS quota within enforcement period (cpu.cfs_period_us)",
+          "Linux kernel CFS bandwidth controller throttled runnable container threads (nr_throttled / throttled_time spike)",
+          "Application request processing latency spiked and worker threads stalled"
+        ]
+      }
+    },
+    {
+      "step_index": 8,
+      "step_type": "blast_radius_computation",
+      "component": "InvestigationEngine._compute_blast_radius",
+      "status": "SUCCESS",
+      "duration_ms": 0.0273,
+      "output_summary": {
+        "pods_affected": [
+          "pricing-calculator-7c9d4b5f8-m2k9l"
+        ],
+        "containers_affected": [
+          "pricing-api"
+        ],
+        "namespaces_affected": [
+          "commerce"
+        ],
+        "nodes_affected": [
+          "node-general-04"
+        ],
+        "services_affected": [],
+        "estimated_service_impact": "Single Pod Affected"
+      }
+    },
+    {
+      "step_index": 9,
+      "step_type": "remediation_generation",
+      "component": "InvestigationEngine._generate_remediations",
+      "status": "SUCCESS",
+      "duration_ms": 0.0246,
+      "output_summary": {
+        "remediation_count": 2,
+        "kubectl_commands": [
+          "kubectl set resources deployment/<deployment-name> --limits=cpu=2000m --requests=cpu=500m",
+          "kubectl top pod pricing-calculator-7c9d4b5f8-m2k9l --containers"
+        ]
+      }
+    }
+  ],
+  "agent_output": {
+    "overall_status": "HIGH_SEVERITY_INCIDENT",
+    "root_cause": {
+      "category": "SCHEDULING_NODE_FAILURE",
+      "summary": "Container CFS CPU Quota Throttling Detected",
+      "confidence": 0.94,
+      "severity": "HIGH",
+      "causal_chain": [
+        "Container CPU usage exceeded configured CFS quota within enforcement period (cpu.cfs_period_us)",
+        "Linux kernel CFS bandwidth controller throttled runnable container threads (nr_throttled / throttled_time spike)",
+        "Application request processing latency spiked and worker threads stalled"
+      ],
+      "contributing_factors": [
+        "Restrictive container resources.limits.cpu relative to burst concurrency",
+        "Multi-threaded runtime spinning more OS threads than allocated CPU quota",
+        "Deployment 'pricing-calculator' is on revision #1 with image 'registry.internal/commerce/pricing-api:v1.18.0' (no recent version change)."
+      ],
+      "primary_finding_id": "RULE_K8S_SCHEDULING_FAILURE"
+    },
+    "blast_radius": {
+      "pods_affected": [
+        "pricing-calculator-7c9d4b5f8-m2k9l"
+      ],
+      "containers_affected": [
+        "pricing-api"
+      ],
+      "namespaces_affected": [
+        "commerce"
+      ],
+      "nodes_affected": [
+        "node-general-04"
+      ],
+      "services_affected": [],
+      "estimated_service_impact": "Single Pod Affected"
+    },
+    "findings": [
+      {
+        "id": "RULE_K8S_SCHEDULING_FAILURE",
+        "category": "SCHEDULING_NODE_FAILURE",
+        "title": "Container CFS CPU Quota Throttling Detected",
+        "severity": "HIGH",
+        "description": "Container CPU usage is being aggressively throttled by the Linux kernel CFS bandwidth controller [CPU_THROTTLING]. Overly restrictive `resources.limits.cpu` causes worker threads to stall waiting for the next 100ms quota period, leading to severe tail-latency spikes without terminating the container.",
+        "confidence": 0.97,
+        "primary_indicator": "CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000) 2026-10-14T09:14:22.480Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cadvisor: CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000)",
+        "evidence": [
+          {
+            "start_line": 2,
+            "end_line": 4,
+            "raw_lines": [
+              "[L2] 2026-10-14T09:14:15.220Z INFO pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 Incoming flash-sale traffic burst: 420 req/sec on /api/v2/calculate-quote",
+              "[L3] 2026-10-14T09:14:22.480Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cadvisor: CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000)",
+              "[L4] 2026-10-14T09:14:25.105Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cgroup/cpu.stat: nr_periods=477 nr_throttled=412 throttled_time=38420000000"
+            ],
+            "timestamp": "2026-10-14T09:14:22.480000Z",
+            "highlighted_reason": "Resource/Node constraint detected: 'CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000) 2026-10-14T09:14:22.480Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cadvisor: CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000)'",
+            "extracted_params": {
+              "subtype": "CPU_THROTTLING",
+              "resource": "CPU"
+            }
+          },
+          {
+            "start_line": 3,
+            "end_line": 5,
+            "raw_lines": [
+              "[L3] 2026-10-14T09:14:22.480Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cadvisor: CPU throttling detected: container pricing-api throttled in 86.4% of CFS periods (cpu.cfs_quota_us=20000, cpu.cfs_period_us=100000)",
+              "[L4] 2026-10-14T09:14:25.105Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cgroup/cpu.stat: nr_periods=477 nr_throttled=412 throttled_time=38420000000",
+              "[L5] 2026-10-14T09:14:28.912Z ERROR pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 kubelet: CFS quota exceeded for container pricing-api: runnable threads stalled for 820ms waiting for next CFS bandwidth period"
+            ],
+            "timestamp": "2026-10-14T09:14:25.105000Z",
+            "highlighted_reason": "Resource/Node constraint detected: 'nr_throttled=412 throttled_time=38420000000 2026-10-14T09:14:25.105Z WARN pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 cgroup/cpu.stat: nr_periods=477 nr_throttled=412 throttled_time=38420000000'",
+            "extracted_params": {
+              "subtype": "CPU_THROTTLING",
+              "resource": "CPU"
+            }
+          }
+        ],
+        "impacted_resources": [
+          "pricing-calculator-7c9d4b5f8-m2k9l"
+        ],
+        "suggested_remediation": [
+          "Inspect cluster node capacities and allocatable resources: `kubectl describe nodes | grep -A 8 'Allocated resources'`.",
+          "Verify pod resource requests and limits (`spec.containers[*].resources`) to ensure they match workload needs and node sizing.",
+          "Increase or remove hard CPU limits (`resources.limits.cpu`) while keeping accurate `resources.requests.cpu`: `kubectl set resources deployment/<name> --limits=cpu=1000m --requests=cpu=500m`.",
+          "Inspect container cgroup throttling metrics (`container_cpu_cfs_throttled_periods_total / container_cpu_cfs_periods_total`)."
+        ],
+        "metadata": {
+          "subtype": "CPU_THROTTLING",
+          "bottlenecks": [
+            "CPU_THROTTLING"
+          ]
+        }
+      }
+    ],
+    "timeline": [
+      {
+        "timestamp": "2026-10-14T09:14:28.912000Z",
+        "relative_time_str": "2026-10-14 09:14:28",
+        "line_number": 5,
+        "event_type": "ERROR",
+        "severity": "HIGH",
+        "summary": "2026-10-14T09:14:28.912Z ERROR pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce c",
+        "details": "2026-10-14T09:14:28.912Z ERROR pod=pricing-calculator-7c9d4b5f8-m2k9l namespace=commerce container=pricing-api node=node-general-04 kubelet: CFS quota exceeded for container pricing-api: runnable threads stalled for 820ms waiting for next CFS bandwidth period",
+        "resource": "pricing-calculator-7c9d4b5f8-m2k9l"
+      }
+    ],
+    "remediations": [
+      {
+        "action_type": "immediate_mitigation",
+        "description": "Increase or remove restrictive CPU CFS limit on the throttled container.",
+        "kubectl_command": "kubectl set resources deployment/<deployment-name> --limits=cpu=2000m --requests=cpu=500m",
+        "yaml_patch": null,
+        "explanation": "Raises the CFS bandwidth quota so burst threads are not throttled during request spikes."
+      },
+      {
+        "action_type": "permanent_fix",
+        "description": "Monitor container CPU usage and tune runtime thread pool concurrency (GOMAXPROCS / UV_THREADPOOL_SIZE).",
+        "kubectl_command": "kubectl top pod pricing-calculator-7c9d4b5f8-m2k9l --containers",
+        "yaml_patch": null,
+        "explanation": "Aligns application worker thread counts with allocated Kubernetes CPU requests/limits."
+      }
+    ]
+  },
+  "evaluation": {
+    "passed": true,
+    "score": 1.0,
+    "checks": {
+      "root_cause_category": {
+        "expected": "SCHEDULING_NODE_FAILURE",
+        "actual": "SCHEDULING_NODE_FAILURE",
+        "matched": true
+      },
+      "subtype": {
+        "expected": "CPU_THROTTLING",
+        "actual": "CPU_THROTTLING",
+        "matched": true
+      },
+      "severity": {
+        "expected": "HIGH",
+        "actual": "HIGH",
+        "matched": true
+      },
+      "blast_radius": {
+        "expected_pods": [
+          "pricing-calculator-7c9d4b5f8-m2k9l"
+        ],
+        "actual_pods": [
+          "pricing-calculator-7c9d4b5f8-m2k9l"
+        ],
+        "expected_namespace": "commerce",
+        "actual_namespaces": [
+          "commerce"
+        ],
+        "expected_container": "pricing-api",
+        "actual_containers": [
+          "pricing-api"
+        ],
+        "matched": true
+      },
+      "evidence_keywords": {
+        "expected": [
+          "CPU throttling detected",
+          "nr_throttled=412",
+          "throttled_time=",
+          "CFS quota exceeded"
+        ],
+        "matched_keywords": [
+          "CPU throttling detected",
+          "nr_throttled=412",
+          "throttled_time=",
+          "CFS quota exceeded"
+        ],
+        "matched": true
+      },
+      "remediation_commands": {
+        "expected": [
+          "kubectl set resources deployment/<deployment-name> --limits=cpu=2000m --requests=cpu=500m",
+          "kubectl top pod pricing-calculator-7c9d4b5f8-m2k9l --containers"
+        ],
+        "matched_commands": [
+          "kubectl set resources deployment/<deployment-name> --limits=cpu=2000m --requests=cpu=500m",
+          "kubectl top pod pricing-calculator-7c9d4b5f8-m2k9l --containers"
+        ],
+        "all_generated_commands": [
+          "kubectl set resources deployment/<deployment-name> --limits=cpu=2000m --requests=cpu=500m",
+          "kubectl top pod pricing-calculator-7c9d4b5f8-m2k9l --containers"
+        ],
+        "matched": true
+      }
+    }
+  }
+}

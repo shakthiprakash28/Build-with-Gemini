@@ -76,6 +76,7 @@ class KubernetesInvestigationAgent:
         self.pod_event_tool = pod_event_tool
         self.deployment_history_tool = deployment_history_tool
         self.tools = [get_pod_logs, get_pod_events, get_deployment_history]
+        self.last_trace: Optional[Dict[str, Any]] = None
 
     def get_pod_logs(
         self,
@@ -141,6 +142,11 @@ class KubernetesInvestigationAgent:
         Fetches logs, events, and deployment revision history for the specified Kubernetes Pod
         using `get_pod_logs`, `get_pod_events`, and `get_deployment_history` and runs the investigation.
         """
+        import time
+        from datetime import datetime, timezone
+
+        t_start = time.perf_counter()
+        started_at = datetime.now(timezone.utc).isoformat()
         target_ns = namespace or self.parser.default_namespace or "default"
         self.parser.default_namespace = target_ns
 
@@ -148,6 +154,11 @@ class KubernetesInvestigationAgent:
         tool_errors: List[str] = []
         tools_used: List[str] = []
         history_text: str = ""
+        trace_steps: List[Dict[str, Any]] = []
+        tool_calls_trace: List[Dict[str, Any]] = []
+
+        if context and context.get("_target_extraction_step"):
+            trace_steps.append(context["_target_extraction_step"])
 
         all_default = (
             self.pod_log_tool is None
@@ -156,6 +167,14 @@ class KubernetesInvestigationAgent:
         )
 
         if all_default or self.pod_log_tool is not None:
+            t0 = time.perf_counter()
+            tool_args = {
+                "pod_name": pod_name,
+                "namespace": target_ns,
+                "container": container,
+                "previous": previous,
+                "tail_lines": tail_lines,
+            }
             try:
                 log_text = self.get_pod_logs(
                     pod_name=pod_name,
@@ -164,43 +183,143 @@ class KubernetesInvestigationAgent:
                     previous=previous,
                     tail_lines=tail_lines,
                 )
+                dur_ms = round((time.perf_counter() - t0) * 1000.0, 4)
                 if log_text and log_text.strip():
-                    collected_inputs.append(log_text.strip())
+                    stripped_logs = log_text.strip()
+                    collected_inputs.append(stripped_logs)
                     tools_used.append("get_pod_logs")
+                    lines_list = stripped_logs.splitlines()
+                    step_info = {
+                        "step_index": len(trace_steps) + 1,
+                        "step_type": "tool_call",
+                        "tool_name": "get_pod_logs",
+                        "status": "SUCCESS",
+                        "duration_ms": dur_ms,
+                        "arguments": tool_args,
+                        "output_summary": {
+                            "line_count": len(lines_list),
+                            "char_count": len(stripped_logs),
+                            "preview_lines": lines_list[:5],
+                        },
+                    }
+                    trace_steps.append(step_info)
+                    tool_calls_trace.append(step_info)
             except Exception as exc:
+                dur_ms = round((time.perf_counter() - t0) * 1000.0, 4)
                 tool_errors.append(str(exc))
+                step_info = {
+                    "step_index": len(trace_steps) + 1,
+                    "step_type": "tool_call",
+                    "tool_name": "get_pod_logs",
+                    "status": "ERROR",
+                    "duration_ms": dur_ms,
+                    "arguments": tool_args,
+                    "error": str(exc),
+                }
+                trace_steps.append(step_info)
+                tool_calls_trace.append(step_info)
 
         if all_default or self.pod_event_tool is not None:
+            t0 = time.perf_counter()
+            tool_args = {"pod_name": pod_name, "namespace": target_ns}
             try:
                 events_text = self.get_pod_events(
                     pod_name=pod_name,
                     namespace=target_ns,
                 )
+                dur_ms = round((time.perf_counter() - t0) * 1000.0, 4)
                 if events_text and events_text.strip():
-                    if events_text.strip() not in collected_inputs:
-                        collected_inputs.append(events_text.strip())
+                    stripped_events = events_text.strip()
+                    ev_lines = stripped_events.splitlines()
+                    existing_lines = {line for chunk in collected_inputs for line in chunk.splitlines()}
+                    if stripped_events not in collected_inputs and not all(line in existing_lines for line in ev_lines):
+                        collected_inputs.append(stripped_events)
                     tools_used.append("get_pod_events")
+                    step_info = {
+                        "step_index": len(trace_steps) + 1,
+                        "step_type": "tool_call",
+                        "tool_name": "get_pod_events",
+                        "status": "SUCCESS",
+                        "duration_ms": dur_ms,
+                        "arguments": tool_args,
+                        "output_summary": {
+                            "line_count": len(ev_lines),
+                            "char_count": len(stripped_events),
+                            "preview_lines": ev_lines[:5],
+                        },
+                    }
+                    trace_steps.append(step_info)
+                    tool_calls_trace.append(step_info)
             except Exception as exc:
+                dur_ms = round((time.perf_counter() - t0) * 1000.0, 4)
                 tool_errors.append(str(exc))
+                step_info = {
+                    "step_index": len(trace_steps) + 1,
+                    "step_type": "tool_call",
+                    "tool_name": "get_pod_events",
+                    "status": "ERROR",
+                    "duration_ms": dur_ms,
+                    "arguments": tool_args,
+                    "error": str(exc),
+                }
+                trace_steps.append(step_info)
+                tool_calls_trace.append(step_info)
 
         if all_default or self.deployment_history_tool is not None:
+            t0 = time.perf_counter()
+            tool_args = {
+                "deployment_name": pod_name,
+                "namespace": target_ns,
+                "pod_name": pod_name,
+            }
             try:
                 history_text = self.get_deployment_history(
                     deployment_name=pod_name,
                     namespace=target_ns,
                     pod_name=pod_name,
                 )
+                dur_ms = round((time.perf_counter() - t0) * 1000.0, 4)
                 if history_text and history_text.strip():
+                    stripped_hist = history_text.strip()
                     tools_used.append("get_deployment_history")
                     if not collected_inputs:
-                        collected_inputs.append(history_text.strip())
+                        collected_inputs.append(stripped_hist)
+                    hist_lines = stripped_hist.splitlines()
+                    step_info = {
+                        "step_index": len(trace_steps) + 1,
+                        "step_type": "tool_call",
+                        "tool_name": "get_deployment_history",
+                        "status": "SUCCESS",
+                        "duration_ms": dur_ms,
+                        "arguments": tool_args,
+                        "output_summary": {
+                            "line_count": len(hist_lines),
+                            "char_count": len(stripped_hist),
+                            "preview_lines": hist_lines[:5],
+                        },
+                    }
+                    trace_steps.append(step_info)
+                    tool_calls_trace.append(step_info)
             except Exception as exc:
+                dur_ms = round((time.perf_counter() - t0) * 1000.0, 4)
                 tool_errors.append(str(exc))
+                step_info = {
+                    "step_index": len(trace_steps) + 1,
+                    "step_type": "tool_call",
+                    "tool_name": "get_deployment_history",
+                    "status": "ERROR",
+                    "duration_ms": dur_ms,
+                    "arguments": tool_args,
+                    "error": str(exc),
+                }
+                trace_steps.append(step_info)
+                tool_calls_trace.append(step_info)
 
         if not collected_inputs:
             err_msg = "; ".join(tool_errors) if tool_errors else f"No logs or events found for pod '{pod_name}'."
             raise RuntimeError(err_msg)
 
+        t_parse_0 = time.perf_counter()
         combined_text = "\n".join(collected_inputs)
         entries = self.parser.parse_text(combined_text)
 
@@ -213,6 +332,29 @@ class KubernetesInvestigationAgent:
                 entry.namespace = target_ns
             if container and not entry.container:
                 entry.container = container
+        t_parse_ms = round((time.perf_counter() - t_parse_0) * 1000.0, 4)
+
+        level_counts: Dict[str, int] = {}
+        components_seen: List[str] = []
+        for entry in entries:
+            level_counts[entry.level] = level_counts.get(entry.level, 0) + 1
+            if entry.component and entry.component not in components_seen:
+                components_seen.append(entry.component)
+
+        trace_steps.append({
+            "step_index": len(trace_steps) + 1,
+            "step_type": "log_parsing",
+            "component": "LogParser.parse_text",
+            "status": "SUCCESS",
+            "duration_ms": t_parse_ms,
+            "output_summary": {
+                "total_raw_lines": entries[-1].line_number if entries else 0,
+                "parsed_entries_count": len(entries),
+                "level_distribution": level_counts,
+                "detected_components": components_seen,
+                "stack_trace_entries": sum(1 for e in entries if e.is_stack_trace),
+            },
+        })
 
         ctx = dict(context) if context else {}
         ctx["pod_name"] = clean_pod
@@ -228,6 +370,71 @@ class KubernetesInvestigationAgent:
             )
 
         report = self.engine.analyze(entries, context=ctx)
+        engine_trace = ctx.get("_engine_trace", {})
+
+        trace_steps.append({
+            "step_index": len(trace_steps) + 1,
+            "step_type": "diagnostic_rule_evaluation",
+            "component": "InvestigationEngine.rules",
+            "status": "SUCCESS",
+            "duration_ms": engine_trace.get("phase_timings_ms", {}).get("rule_evaluation_ms", 0.0),
+            "rules_evaluated_count": engine_trace.get("rules_evaluated_count", len(self.engine.rules)),
+            "rules_matched_count": engine_trace.get("rules_matched_count", len(report.findings)),
+            "matched_rule_ids": engine_trace.get("matched_rule_ids", [f.id for f in report.findings]),
+            "rule_evaluations": engine_trace.get("rule_evaluations", []),
+        })
+
+        primary_finding = None
+        if report.root_cause and report.root_cause.primary_finding_id:
+            primary_finding = next(
+                (f for f in report.findings if f.id == report.root_cause.primary_finding_id),
+                None,
+            )
+        if primary_finding is None and report.findings:
+            primary_finding = report.findings[0]
+        subtype = (
+            (primary_finding.metadata.get("subtype") or primary_finding.metadata.get("network_subsystem"))
+            if primary_finding
+            else None
+        )
+
+        trace_steps.append({
+            "step_index": len(trace_steps) + 1,
+            "step_type": "causal_root_cause_resolution",
+            "component": "InvestigationEngine._determine_root_cause",
+            "status": "SUCCESS",
+            "duration_ms": engine_trace.get("phase_timings_ms", {}).get("root_cause_resolution_ms", 0.0),
+            "output_summary": {
+                "category": report.root_cause.category.value if report.root_cause else None,
+                "subtype": subtype,
+                "severity": report.root_cause.severity.value if report.root_cause else None,
+                "confidence": report.root_cause.confidence if report.root_cause else None,
+                "primary_finding_id": report.root_cause.primary_finding_id if report.root_cause else None,
+                "summary": report.root_cause.summary if report.root_cause else None,
+                "causal_chain": report.root_cause.causal_chain if report.root_cause else [],
+            },
+        })
+
+        trace_steps.append({
+            "step_index": len(trace_steps) + 1,
+            "step_type": "blast_radius_computation",
+            "component": "InvestigationEngine._compute_blast_radius",
+            "status": "SUCCESS",
+            "duration_ms": engine_trace.get("phase_timings_ms", {}).get("blast_radius_computation_ms", 0.0),
+            "output_summary": report.blast_radius.model_dump(mode="json"),
+        })
+
+        trace_steps.append({
+            "step_index": len(trace_steps) + 1,
+            "step_type": "remediation_generation",
+            "component": "InvestigationEngine._generate_remediations",
+            "status": "SUCCESS",
+            "duration_ms": engine_trace.get("phase_timings_ms", {}).get("remediation_generation_ms", 0.0),
+            "output_summary": {
+                "remediation_count": len(report.remediations),
+                "kubectl_commands": [r.kubectl_command for r in report.remediations if r.kubectl_command],
+            },
+        })
 
         if enable_llm and self.llm_advisor.is_available:
             synthesis = self.llm_advisor.synthesize(
@@ -236,6 +443,27 @@ class KubernetesInvestigationAgent:
                 log_sample=combined_text[:5000],
             )
             report.ai_synthesis = synthesis
+
+        total_duration_ms = round((time.perf_counter() - t_start) * 1000.0, 4)
+        completed_at = datetime.now(timezone.utc).isoformat()
+
+        self.last_trace = {
+            "investigation_id": report.investigation_id,
+            "mode": "pod_investigation",
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "total_duration_ms": total_duration_ms,
+            "target": {
+                "pod_name": clean_pod,
+                "namespace": target_ns,
+                "container": container,
+            },
+            "tools_invoked": tools_used,
+            "tool_calls": tool_calls_trace,
+            "steps": trace_steps,
+            "engine_trace": engine_trace,
+            "report": report.to_dict(),
+        }
 
         return report
 
@@ -253,6 +481,12 @@ class KubernetesInvestigationAgent:
         Investigates a Kubernetes Pod by fetching its logs with `get_pod_logs`
         (when given a pod name or natural-language prompt), or analyzes raw log streams.
         """
+        import time
+        from datetime import datetime, timezone
+
+        t_start = time.perf_counter()
+        started_at = datetime.now(timezone.utc).isoformat()
+
         if namespace:
             self.parser.default_namespace = namespace
 
@@ -260,18 +494,34 @@ class KubernetesInvestigationAgent:
             source = source.stem
 
         if isinstance(source, str) and not self._is_raw_log_text(source):
+            t_ext_0 = time.perf_counter()
             pod_name, extracted_ns = self._extract_pod_target(source, default_namespace=namespace)
-            return self.investigate_pod(
+            t_ext_ms = round((time.perf_counter() - t_ext_0) * 1000.0, 4)
+            ctx = dict(context) if context else {}
+            ctx["_target_extraction_step"] = {
+                "step_index": 1,
+                "step_type": "target_extraction",
+                "component": "KubernetesInvestigationAgent._extract_pod_target",
+                "status": "SUCCESS",
+                "duration_ms": t_ext_ms,
+                "input": {"prompt": source, "default_namespace": namespace},
+                "output": {"pod_name": pod_name, "namespace": extracted_ns},
+            }
+            report = self.investigate_pod(
                 pod_name=pod_name,
                 namespace=extracted_ns,
                 container=container,
                 previous=previous,
                 tail_lines=tail_lines,
                 enable_llm=enable_llm,
-                context=context,
+                context=ctx,
             )
+            if self.last_trace is not None:
+                self.last_trace["input_source"] = source
+            return report
 
         # Fallback for in-memory raw log strings, line lists, or streams
+        t_parse_0 = time.perf_counter()
         if isinstance(source, list):
             entries = list(self.parser.parse_lines(source))
             raw_text_for_llm = "\n".join(source[:200])
@@ -282,8 +532,11 @@ class KubernetesInvestigationAgent:
         else:
             entries = self.parser.parse_text(str(source))
             raw_text_for_llm = str(source)[:5000]
+        t_parse_ms = round((time.perf_counter() - t_parse_0) * 1000.0, 4)
 
-        report = self.engine.analyze(entries, context=context)
+        ctx = dict(context) if context else {}
+        report = self.engine.analyze(entries, context=ctx)
+        engine_trace = ctx.get("_engine_trace", {})
 
         if enable_llm and self.llm_advisor.is_available:
             synthesis = self.llm_advisor.synthesize(
@@ -293,7 +546,127 @@ class KubernetesInvestigationAgent:
             )
             report.ai_synthesis = synthesis
 
+        total_duration_ms = round((time.perf_counter() - t_start) * 1000.0, 4)
+        completed_at = datetime.now(timezone.utc).isoformat()
+
+        level_counts: Dict[str, int] = {}
+        components_seen: List[str] = []
+        for entry in entries:
+            level_counts[entry.level] = level_counts.get(entry.level, 0) + 1
+            if entry.component and entry.component not in components_seen:
+                components_seen.append(entry.component)
+
+        primary_finding = None
+        if report.root_cause and report.root_cause.primary_finding_id:
+            primary_finding = next(
+                (f for f in report.findings if f.id == report.root_cause.primary_finding_id),
+                None,
+            )
+        if primary_finding is None and report.findings:
+            primary_finding = report.findings[0]
+        subtype = (
+            (primary_finding.metadata.get("subtype") or primary_finding.metadata.get("network_subsystem"))
+            if primary_finding
+            else None
+        )
+
+        self.last_trace = {
+            "investigation_id": report.investigation_id,
+            "mode": "raw_log_stream",
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "total_duration_ms": total_duration_ms,
+            "tools_invoked": [],
+            "tool_calls": [],
+            "steps": [
+                {
+                    "step_index": 1,
+                    "step_type": "log_parsing",
+                    "component": "LogParser.parse_text",
+                    "status": "SUCCESS",
+                    "duration_ms": t_parse_ms,
+                    "output_summary": {
+                        "total_raw_lines": entries[-1].line_number if entries else 0,
+                        "parsed_entries_count": len(entries),
+                        "level_distribution": level_counts,
+                        "detected_components": components_seen,
+                        "stack_trace_entries": sum(1 for e in entries if e.is_stack_trace),
+                    },
+                },
+                {
+                    "step_index": 2,
+                    "step_type": "diagnostic_rule_evaluation",
+                    "component": "InvestigationEngine.rules",
+                    "status": "SUCCESS",
+                    "duration_ms": engine_trace.get("phase_timings_ms", {}).get("rule_evaluation_ms", 0.0),
+                    "rules_evaluated_count": engine_trace.get("rules_evaluated_count", len(self.engine.rules)),
+                    "rules_matched_count": engine_trace.get("rules_matched_count", len(report.findings)),
+                    "matched_rule_ids": engine_trace.get("matched_rule_ids", [f.id for f in report.findings]),
+                    "rule_evaluations": engine_trace.get("rule_evaluations", []),
+                },
+                {
+                    "step_index": 3,
+                    "step_type": "causal_root_cause_resolution",
+                    "component": "InvestigationEngine._determine_root_cause",
+                    "status": "SUCCESS",
+                    "duration_ms": engine_trace.get("phase_timings_ms", {}).get("root_cause_resolution_ms", 0.0),
+                    "output_summary": {
+                        "category": report.root_cause.category.value if report.root_cause else None,
+                        "subtype": subtype,
+                        "severity": report.root_cause.severity.value if report.root_cause else None,
+                        "confidence": report.root_cause.confidence if report.root_cause else None,
+                        "primary_finding_id": report.root_cause.primary_finding_id if report.root_cause else None,
+                        "summary": report.root_cause.summary if report.root_cause else None,
+                        "causal_chain": report.root_cause.causal_chain if report.root_cause else [],
+                    },
+                },
+                {
+                    "step_index": 4,
+                    "step_type": "blast_radius_computation",
+                    "component": "InvestigationEngine._compute_blast_radius",
+                    "status": "SUCCESS",
+                    "duration_ms": engine_trace.get("phase_timings_ms", {}).get("blast_radius_computation_ms", 0.0),
+                    "output_summary": report.blast_radius.model_dump(mode="json"),
+                },
+                {
+                    "step_index": 5,
+                    "step_type": "remediation_generation",
+                    "component": "InvestigationEngine._generate_remediations",
+                    "status": "SUCCESS",
+                    "duration_ms": engine_trace.get("phase_timings_ms", {}).get("remediation_generation_ms", 0.0),
+                    "output_summary": {
+                        "remediation_count": len(report.remediations),
+                        "kubectl_commands": [r.kubectl_command for r in report.remediations if r.kubectl_command],
+                    },
+                },
+            ],
+            "engine_trace": engine_trace,
+            "report": report.to_dict(),
+        }
+
         return report
+
+    def investigate_with_trace(
+        self,
+        source: Union[str, Path, TextIO, List[str]],
+        namespace: Optional[str] = None,
+        container: Optional[str] = None,
+        previous: bool = False,
+        tail_lines: Optional[int] = None,
+        enable_llm: bool = False,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[InvestigationReport, Dict[str, Any]]:
+        """Runs `investigate(...)` and returns `(report, trace_dict)`."""
+        report = self.investigate(
+            source=source,
+            namespace=namespace,
+            container=container,
+            previous=previous,
+            tail_lines=tail_lines,
+            enable_llm=enable_llm,
+            context=context,
+        )
+        return report, (self.last_trace or {})
 
     def to_markdown(self, report: InvestigationReport) -> str:
         """Renders an InvestigationReport as GitHub-flavored Markdown."""
