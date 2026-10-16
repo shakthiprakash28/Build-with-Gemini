@@ -7,13 +7,22 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Optional
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-from rich.syntax import Syntax
-from rich.tree import Tree
+from typing import Any, Optional
+
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    from rich.syntax import Syntax
+    from rich.tree import Tree
+except ImportError:  # pragma: no cover
+    Console = None  # type: ignore[assignment,misc]
+    Panel = None  # type: ignore[assignment,misc]
+    Table = None  # type: ignore[assignment,misc]
+    Text = None  # type: ignore[assignment,misc]
+    Syntax = None  # type: ignore[assignment,misc]
+    Tree = None  # type: ignore[assignment,misc]
 
 from k8s_investigate.models import InvestigationReport, Severity
 
@@ -46,8 +55,8 @@ SEVERITY_EMOJIS = {
 class ReportRenderer:
     """Renders investigation reports in Terminal (Rich), Markdown, or JSON formats."""
 
-    def __init__(self, console: Optional[Console] = None):
-        self.console = console or Console()
+    def __init__(self, console: Optional[Any] = None):
+        self.console = console or (Console() if Console is not None else None)
 
     def render_console(self, report: InvestigationReport) -> None:
         """Displays rich colorized terminal dashboard of the investigation."""

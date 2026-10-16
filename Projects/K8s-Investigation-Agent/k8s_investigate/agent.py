@@ -949,3 +949,57 @@ class KubernetesInvestigationAgent:
                 return cand, target_ns
 
         raise ValueError(f"Could not determine a Kubernetes Pod name from input: '{source}'")
+
+
+def analyze_kubernetes_logs(log_content: str) -> str:
+    """Analyze raw Kubernetes Pod logs, kubectl describe output, or cluster events and return a structured Markdown incident report.
+
+    Args:
+        log_content: Raw Kubernetes pod logs, events, or kubectl describe output text.
+
+    Returns:
+        A comprehensive Markdown incident investigation report with root causes, causal chain, evidence, and remediation steps.
+    """
+    agent = KubernetesInvestigationAgent()
+    report = agent.investigate_text(log_content, source_name="inline-logs")
+    return agent.render(report, output_format="markdown")
+
+
+def _build_adk_agent_and_app() -> Tuple[Any, Any]:
+    """Builds the Google ADK Agent and App when google-adk is installed, or falls back to KubernetesInvestigationAgent."""
+    default_agent = KubernetesInvestigationAgent()
+    try:
+        from google.adk.agents import Agent
+        from google.adk.apps import App
+        from google.adk.models import Gemini
+        from google.genai import types
+    except ImportError:
+        return default_agent, default_agent
+
+    adk_root_agent = Agent(
+        name="k8s_investigate",
+        model=Gemini(
+            model=os.environ.get("K8S_INVESTIGATE_MODEL", "gemini-2.5-flash"),
+            retry_options=types.HttpRetryOptions(attempts=3),
+        ),
+        instruction=(
+            "You are an autonomous Kubernetes Investigation Agent. "
+            "Use get_pod_logs, get_pod_events, get_deployment_history, and analyze_kubernetes_logs "
+            "to investigate pod failures, determine causal root causes, extract log evidence, "
+            "and provide actionable remediation commands."
+        ),
+        tools=[
+            get_pod_logs,
+            get_pod_events,
+            get_deployment_history,
+            analyze_kubernetes_logs,
+        ],
+    )
+    adk_app = App(root_agent=adk_root_agent, name="k8s_investigate")
+    return adk_root_agent, adk_app
+
+
+_adk_pair = _build_adk_agent_and_app()
+root_agent = _adk_pair[0]
+app = _adk_pair[1]
+

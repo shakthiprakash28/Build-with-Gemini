@@ -1,0 +1,8 @@
+{
+  "remote_agent_runtime_id": "projects/242122824215/locations/us-east1/reasoningEngines/818039949600227328",
+  "deployment_timestamp": "2026-10-15T21:42:05.666294+00:00",
+  "deployment_target": "agent_runtime",
+  "is_a2a": true,
+  "language": "python",
+  "agent_directory": "k8s_investigate"
+}
