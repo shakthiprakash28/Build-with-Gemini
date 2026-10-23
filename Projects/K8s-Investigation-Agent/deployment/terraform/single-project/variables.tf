@@ -21,12 +21,85 @@ variable "project_name" {
 variable "project_id" {
   type        = string
   description = "Google Cloud Project ID for resource deployment."
+  default     = "k8s-investigation-agent-511111"
 }
 
 variable "region" {
   type        = string
   description = "Google Cloud region for resource deployment."
   default     = "us-east1"
+}
+
+variable "nodes_subnet_cidr" {
+  type        = string
+  description = "Primary IPv4 CIDR range for GKE nodes in the regional subnet."
+  default     = "10.0.0.0/20"
+}
+
+variable "pods_secondary_range_name" {
+  type        = string
+  description = "Name of the secondary IP range used for GKE Pods."
+  default     = "gke-pods"
+}
+
+variable "pods_secondary_cidr" {
+  type        = string
+  description = "Secondary IPv4 CIDR range for GKE Pods."
+  default     = "10.4.0.0/14"
+}
+
+variable "services_secondary_range_name" {
+  type        = string
+  description = "Name of the secondary IP range used for GKE Services."
+  default     = "gke-services"
+}
+
+variable "services_secondary_cidr" {
+  type        = string
+  description = "Secondary IPv4 CIDR range for GKE Services."
+  default     = "10.8.0.0/20"
+}
+
+variable "gke_master_ipv4_cidr_block" {
+  type        = string
+  description = "IPv4 CIDR block (/28) for the GKE private cluster control plane."
+  default     = "172.16.0.0/28"
+}
+
+variable "gke_machine_type" {
+  type        = string
+  description = "Compute Engine machine type for GKE worker nodes."
+  default     = "e2-standard-4"
+}
+
+variable "gke_min_node_count" {
+  type        = number
+  description = "Minimum number of nodes per zone in the primary GKE node pool."
+  default     = 1
+}
+
+variable "gke_max_node_count" {
+  type        = number
+  description = "Maximum number of nodes per zone in the primary GKE node pool."
+  default     = 3
+}
+
+variable "gke_deletion_protection" {
+  type        = bool
+  description = "Whether or not to allow Terraform to destroy the GKE cluster."
+  default     = false
+}
+
+variable "k8s_namespace" {
+  type        = string
+  description = "Kubernetes namespace for Workload Identity binding."
+  default     = "default"
+}
+
+variable "k8s_service_account_name" {
+  type        = string
+  description = "Kubernetes Service Account name bound to the application Google Service Account via Workload Identity."
+  default     = "k8s-investigate-ksa"
 }
 
 variable "telemetry_logs_filter" {
