@@ -101,6 +101,12 @@ The agent pod runs **inside** the cluster but must securely call Gemini Enterpri
 ![img.png](img.png)
 ![img_5.png](img_5.png)
 
+**GKE**
+
+![img_6.png](img_6.png)
+![img_7.png](img_7.png)
+![img_8.png](img_8.png)
+
 ## 💡 Key takeaways
 1. Agent CLI + the **deploy skill** lets you deploy by natural language; the **Dockerfile** from scaffolding is reused for all container targets.
 2. Pick the target by **control vs operational effort**: Agent Runtime → Cloud Run → GKE.
