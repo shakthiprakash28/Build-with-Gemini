@@ -96,6 +96,11 @@ resource "google_vertex_ai_reasoning_engine" "app" {
         name  = "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY"
         value = "true"
       }
+
+      env {
+        name  = "K8S_MCP_SERVER_URL"
+        value = "http://136.108.33.101/mcp"
+      }
     }
 
     source_code_spec {

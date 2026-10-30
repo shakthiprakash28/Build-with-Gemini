@@ -1,0 +1,149 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-mcp-sa
+  namespace: default
+  labels:
+    app: k8s-mcp-server
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-mcp-cluster-reader
+  labels:
+    app: k8s-mcp-server
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - pods/status
+      - events
+      - nodes
+      - namespaces
+      - services
+      - endpoints
+      - configmaps
+      - persistentvolumeclaims
+      - replicationcontrollers
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - replicasets
+      - statefulsets
+      - daemonsets
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["events.k8s.io"]
+    resources:
+      - events
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-mcp-cluster-reader-binding
+  labels:
+    app: k8s-mcp-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-mcp-cluster-reader
+subjects:
+  - kind: ServiceAccount
+    name: k8s-mcp-sa
+    namespace: default
+  - kind: ServiceAccount
+    name: k8s-investigate-ksa
+    namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-mcp-server
+  namespace: default
+  labels:
+    app: k8s-mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-mcp-server
+  template:
+    metadata:
+      labels:
+        app: k8s-mcp-server
+    spec:
+      serviceAccountName: k8s-mcp-sa
+      containers:
+        - name: mcp-server
+          image: us-east1-docker.pkg.dev/k8s-investigation-agent-511111/k8s-investigate-repo/k8s-investigate:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              uv pip install --quiet "mcp>=2.0.0" "kubernetes>=30.0.0" && \
+              exec uv run --no-sync uvicorn mcp_server:app --app-dir /mcp-app --host 0.0.0.0 --port 8080
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - name: mcp-code
+              mountPath: /mcp-app
+              readOnly: true
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 20
+      volumes:
+        - name: mcp-code
+          configMap:
+            name: k8s-mcp-server-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-mcp-server-lb
+  namespace: default
+  labels:
+    app: k8s-mcp-server
+spec:
+  type: LoadBalancer
+  selector:
+    app: k8s-mcp-server
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+    - name: mcp-http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080

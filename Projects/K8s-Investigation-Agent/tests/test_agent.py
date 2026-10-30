@@ -5,7 +5,7 @@ Tests for high-level Kubernetes Investigation Agent interface, get_pod_logs, get
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
-from k8s_investigate.agent import KubernetesInvestigationAgent
+from k8s_investigate.agent import KubernetesInvestigationAgent, analyze_kubernetes_logs
 from k8s_investigate.models import FailureCategory
 from k8s_investigate.tools import get_deployment_history, get_pod_events, get_pod_logs
 
@@ -203,3 +203,91 @@ def test_agent_markdown_and_json_serialization():
     js = agent.renderer.render_json(report)
     assert "investigation_id" in js
     assert "root_cause" in js
+
+
+def test_analyze_kubernetes_logs_adk_tool():
+    log = "2026-10-10T00:10:00Z stderr F Warning OOMKilled Pod memory limit exceeded: 512Mi. Exit code 137."
+    md_report = analyze_kubernetes_logs(log)
+    assert "# 🛡️ Kubernetes Incident Investigation Report" in md_report
+    assert "OOM_KILL" in md_report or "OOM" in md_report
+    assert "Primary Root Cause" in md_report
+
+
+def test_adk_root_agent_configured_with_mcp_toolset():
+    from google.adk.tools.mcp_tool import McpToolset, StreamableHTTPConnectionParams
+    from k8s_investigate.agent import DEFAULT_K8S_MCP_SERVER_URL, root_agent
+
+    mcp_toolsets = [t for t in root_agent.tools if isinstance(t, McpToolset)]
+    assert len(mcp_toolsets) == 1
+    conn_params = mcp_toolsets[0]._connection_params
+    assert isinstance(conn_params, StreamableHTTPConnectionParams)
+    assert conn_params.url == DEFAULT_K8S_MCP_SERVER_URL
+    assert analyze_kubernetes_logs in root_agent.tools
+
+
+def test_adk_root_agent_configured_with_memory_bank():
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from google.adk.tools.preload_memory_tool import PreloadMemoryTool
+    from k8s_investigate.agent import generate_memories_callback, root_agent
+    from k8s_investigate.app_utils.memory_config import (
+        KUBERNETES_INCIDENT_FINDINGS_TOPIC,
+        KUBERNETES_REMEDIATIONS_TOPIC,
+        memory_bank_config,
+    )
+
+    assert root_agent.after_agent_callback == generate_memories_callback
+    assert any(isinstance(t, PreloadMemoryTool) for t in root_agent.tools)
+
+    # Verify callback delegates to add_session_to_memory()
+    mock_ctx = MagicMock()
+    mock_ctx.add_session_to_memory = AsyncMock()
+    asyncio.run(generate_memories_callback(mock_ctx))
+    mock_ctx.add_session_to_memory.assert_awaited_once()
+
+    # Verify callback is a safe no-op when memory_service is None
+    mock_ctx_no_mem = MagicMock()
+    mock_ctx_no_mem._invocation_context.memory_service = None
+    mock_ctx_no_mem.add_session_to_memory = AsyncMock()
+    asyncio.run(generate_memories_callback(mock_ctx_no_mem))
+    mock_ctx_no_mem.add_session_to_memory.assert_not_awaited()
+
+    # Verify memory_bank_config includes Kubernetes custom topics
+    topics = memory_bank_config.customization_configs[0].memory_topics
+    custom_labels = [
+        t.custom_memory_topic.label
+        for t in topics
+        if t.custom_memory_topic is not None
+    ]
+    assert KUBERNETES_INCIDENT_FINDINGS_TOPIC.label in custom_labels
+    assert KUBERNETES_REMEDIATIONS_TOPIC.label in custom_labels
+
+
+def test_services_get_memory_service(monkeypatch):
+    from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
+    from google.adk.memory.vertex_ai_memory_bank_service import (
+        VertexAiMemoryBankService,
+    )
+    from k8s_investigate.app_utils import services
+
+    services.get_memory_service.cache_clear()
+    monkeypatch.delenv("MEMORY_SERVICE_URI", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_AGENT_ENGINE_ID", raising=False)
+    mem_svc = services.get_memory_service()
+    assert isinstance(mem_svc, InMemoryMemoryService)
+
+    services.get_memory_service.cache_clear()
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "k8s-investigation-agent-511111")
+    monkeypatch.setenv("GOOGLE_CLOUD_AGENT_ENGINE_LOCATION", "us-east1")
+    monkeypatch.setenv(
+        "GOOGLE_CLOUD_AGENT_ENGINE_ID",
+        "projects/242122824215/locations/us-east1/reasoningEngines/818039949600227328",
+    )
+    vertex_mem_svc = services.get_memory_service()
+    assert isinstance(vertex_mem_svc, VertexAiMemoryBankService)
+    assert vertex_mem_svc._agent_engine_id == "818039949600227328"
+    services.get_memory_service.cache_clear()
+
+
+

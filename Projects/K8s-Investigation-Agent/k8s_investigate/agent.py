@@ -668,6 +668,30 @@ class KubernetesInvestigationAgent:
         )
         return report, (self.last_trace or {})
 
+    def investigate_text(
+        self,
+        text: str,
+        source_name: str = "inline-logs",
+        enable_llm: bool = False,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> InvestigationReport:
+        """Analyzes raw Kubernetes log text directly and returns an InvestigationReport."""
+        ctx = dict(context) if context else {}
+        if source_name and "source" not in ctx:
+            ctx["source"] = source_name
+        return self.investigate(
+            source=text.splitlines(),
+            enable_llm=enable_llm,
+            context=ctx,
+        )
+
+    def render(self, report: InvestigationReport, output_format: str = "markdown") -> str:
+        """Renders an InvestigationReport in the requested format ('markdown' or 'json')."""
+        fmt = (output_format or "markdown").strip().lower()
+        if fmt == "json":
+            return self.to_json(report)
+        return self.to_markdown(report)
+
     def to_markdown(self, report: InvestigationReport) -> str:
         """Renders an InvestigationReport as GitHub-flavored Markdown."""
         return self.renderer.render_markdown(report)
@@ -951,6 +975,9 @@ class KubernetesInvestigationAgent:
         raise ValueError(f"Could not determine a Kubernetes Pod name from input: '{source}'")
 
 
+DEFAULT_K8S_MCP_SERVER_URL = "http://136.108.33.101/mcp"
+
+
 def analyze_kubernetes_logs(log_content: str) -> str:
     """Analyze raw Kubernetes Pod logs, kubectl describe output, or cluster events and return a structured Markdown incident report.
 
@@ -965,6 +992,19 @@ def analyze_kubernetes_logs(log_content: str) -> str:
     return agent.render(report, output_format="markdown")
 
 
+async def generate_memories_callback(callback_context: Any) -> None:
+    """Sends the session's events to Agent Platform Memory Bank for automatic memory generation.
+
+    Triggered after each agent turn via ``after_agent_callback`` so findings from
+    each Kubernetes investigation are persisted and available in future sessions.
+    """
+    inv_ctx = getattr(callback_context, "_invocation_context", None)
+    if inv_ctx is not None and getattr(inv_ctx, "memory_service", None) is None:
+        return None
+    await callback_context.add_session_to_memory()
+    return None
+
+
 def _build_adk_agent_and_app() -> Tuple[Any, Any]:
     """Builds the Google ADK Agent and App when google-adk is installed, or falls back to KubernetesInvestigationAgent."""
     default_agent = KubernetesInvestigationAgent()
@@ -972,9 +1012,18 @@ def _build_adk_agent_and_app() -> Tuple[Any, Any]:
         from google.adk.agents import Agent
         from google.adk.apps import App
         from google.adk.models import Gemini
+        from google.adk.tools.mcp_tool import McpToolset, StreamableHTTPConnectionParams
+        from google.adk.tools.preload_memory_tool import PreloadMemoryTool
         from google.genai import types
     except ImportError:
         return default_agent, default_agent
+
+    mcp_server_url = os.environ.get("K8S_MCP_SERVER_URL", DEFAULT_K8S_MCP_SERVER_URL)
+    k8s_mcp_toolset = McpToolset(
+        connection_params=StreamableHTTPConnectionParams(
+            url=mcp_server_url,
+        ),
+    )
 
     adk_root_agent = Agent(
         name="k8s_investigate",
@@ -983,17 +1032,27 @@ def _build_adk_agent_and_app() -> Tuple[Any, Any]:
             retry_options=types.HttpRetryOptions(attempts=3),
         ),
         instruction=(
-            "You are an autonomous Kubernetes Investigation Agent. "
-            "Use get_pod_logs, get_pod_events, get_deployment_history, and analyze_kubernetes_logs "
-            "to investigate pod failures, determine causal root causes, extract log evidence, "
-            "and provide actionable remediation commands."
+            "You are an autonomous Kubernetes Investigation Agent connected to a live GKE "
+            "Kubernetes cluster via an MCP Server and backed by the Agent Platform Memory Bank. "
+            "Use the MCP cluster tools (list_namespaces, list_pods, get_pod_logs, "
+            "get_pod_events, get_deployment_history, get_nodes_info, get_cluster_resources) "
+            "to remotely inspect and troubleshoot the Kubernetes cluster, and use "
+            "analyze_kubernetes_logs to run deterministic causal root-cause analysis, "
+            "extract log evidence, and generate actionable remediation commands. "
+            "You automatically remember past Kubernetes incidents and investigation findings "
+            "across sessions via Memory Bank: always check recalled memories from previous "
+            "conversations to correlate recurring pod failures, past root causes, recent "
+            "rollouts, or previously applied remediations when troubleshooting new issues, "
+            "and clearly state the key investigation findings (affected pods, namespaces, "
+            "failure category, causal root cause, and remediation steps) so Memory Bank "
+            "saves them for future troubleshooting."
         ),
         tools=[
-            get_pod_logs,
-            get_pod_events,
-            get_deployment_history,
+            k8s_mcp_toolset,
             analyze_kubernetes_logs,
+            PreloadMemoryTool(),
         ],
+        after_agent_callback=generate_memories_callback,
     )
     adk_app = App(root_agent=adk_root_agent, name="k8s_investigate")
     return adk_root_agent, adk_app

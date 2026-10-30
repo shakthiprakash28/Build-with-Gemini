@@ -23,7 +23,7 @@ COPY ./pyproject.toml ./README.md ./uv.lock* ./
 
 COPY ./k8s_investigate ./k8s_investigate
 
-RUN uv sync --frozen && uv pip install "rich>=13.0.0"
+RUN uv sync --frozen
 
 ARG AGENT_VERSION=0.0.0
 ENV AGENT_VERSION=${AGENT_VERSION}
