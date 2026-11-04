@@ -1,9 +1,9 @@
-# Day 1: Prototype vs Enterprise Agent (Day-1 vs Day-2 Operations)
+# Day 1: Prototype vs Enterprise Agent 
 
 
 
 ## 🎯 Objectives
-- Understand the series structure and the end-to-end agent lifecycle.
+- Understand the end-to-end agent lifecycle.
 - Understand why a working prototype is not production-ready.
 - Map each production gap to a Gemini Enterprise Agent Platform feature.
 
@@ -16,8 +16,8 @@
   3. **Govern** the agent
   4. **Observe** the deployed agent in production
 
-## 2. Day-1 vs Day-2 operations (core idea)
-| | Day-1 operations | Day-2 operations |
+## 2. Prototype vs Enterprise Agent (core idea)
+| | Prototype | Enterprise Agent|
 |---|---|---|
 | Meaning | Getting a working **prototype** | Running it in **production** |
 | How | Prompt a coding agent (Claude, Cursor, Copilot…), connect tools/MCP/RAG | Trust, runtime, memory, identity, observability, cost, accountability |
